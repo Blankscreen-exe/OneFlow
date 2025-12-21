@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - JWT_EXPIRES_IN=7d
+      - CORS_ORIGIN=http://localhost:3000
+      # Uncomment to use PostgreSQL instead of SQLite
+      # - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/oneflow
+    volumes:
+      # Persist SQLite database
+      - ./database.sqlite:/app/database.sqlite
+    depends_on:
+      - postgres
+    networks:
+      - oneflow-network
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=oneflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - oneflow-network
+    # Comment out if you want to use SQLite
+    profiles:
+      - postgres
+
+volumes:
+  postgres-data:
+
+networks:
+  oneflow-network:
+    driver: bridge
+
