@@ -4,6 +4,12 @@ import { join } from 'path';
 export const getDatabaseConfig = (): TypeOrmModuleOptions => {
   const databaseUrl = process.env.DATABASE_URL;
   const nodeEnv = process.env.NODE_ENV || 'development';
+  
+  // Control synchronize behavior
+  // Set DB_SYNCHRONIZE=true to enable (default: false for safety)
+  // Set DROP_SCHEMA=true to drop and recreate schema (use with caution!)
+  const synchronize = process.env.DB_SYNCHRONIZE === 'true' && nodeEnv === 'development';
+  const dropSchema = process.env.DROP_SCHEMA === 'true' && nodeEnv === 'development';
 
   // If DATABASE_URL is provided, use it (PostgreSQL/MySQL)
   if (databaseUrl) {
@@ -18,7 +24,8 @@ export const getDatabaseConfig = (): TypeOrmModuleOptions => {
         url: databaseUrl,
         entities: [join(__dirname, '..', '**', '*.entity{.ts,.js}')],
         migrations: [join(__dirname, '..', 'database', 'migrations', '*.{.ts,.js}')],
-        synchronize: nodeEnv === 'development',
+        synchronize,
+        dropSchema,
         logging: nodeEnv === 'development',
         ssl: nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
       };
@@ -30,19 +37,22 @@ export const getDatabaseConfig = (): TypeOrmModuleOptions => {
         url: databaseUrl,
         entities: [join(__dirname, '..', '**', '*.entity{.ts,.js}')],
         migrations: [join(__dirname, '..', 'database', 'migrations', '*.{.ts,.js}')],
-        synchronize: nodeEnv === 'development',
+        synchronize,
+        dropSchema,
         logging: nodeEnv === 'development',
       };
     }
   }
 
   // Fallback to SQLite if DATABASE_URL is not provided
+  // SQLite is safer to synchronize by default in development
   return {
     type: 'sqlite',
     database: join(process.cwd(), 'database.sqlite'),
     entities: [join(__dirname, '..', '**', '*.entity{.ts,.js}')],
     migrations: [join(__dirname, '..', 'database', 'migrations', '*.{.ts,.js}')],
-    synchronize: nodeEnv === 'development',
+    synchronize: nodeEnv === 'development', // SQLite is safe to sync by default
+    dropSchema,
     logging: nodeEnv === 'development',
   };
 };

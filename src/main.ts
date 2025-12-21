@@ -8,8 +8,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('port');
-  const corsOrigin = configService.get<string>('cors.origin');
+  const port = configService.get<number>('port') || 3000;
+  const corsOrigin = configService.get<string>('cors.origin') || 'http://localhost:3000';
 
   // Security
   app.use(helmet());

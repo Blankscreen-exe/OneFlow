@@ -41,7 +41,9 @@ cp .env.example .env
 | `PORT` | No | `3000` | Application port |
 | `NODE_ENV` | No | `development` | Environment (development/production/test) |
 | `DATABASE_URL` | No | - | Database connection string (PostgreSQL/MySQL). If not provided, SQLite is used |
-| `JWT_SECRET` | Yes | - | Secret key for JWT tokens |
+| `DB_SYNCHRONIZE` | No | `false` | Enable TypeORM schema synchronization (use with caution, only in development) |
+| `DROP_SCHEMA` | No | `false` | Drop and recreate database schema on startup (use with extreme caution!) |
+| `JWT_SECRET` | No | `dev-secret-change-in-production` | Secret key for JWT tokens (change in production!) |
 | `JWT_EXPIRES_IN` | No | `7d` | JWT token expiration time |
 | `CORS_ORIGIN` | No | `http://localhost:3000` | CORS allowed origin |
 
@@ -61,7 +63,35 @@ DATABASE_URL=mysql://user:password@localhost:3306/dbname
 ```
 # Leave DATABASE_URL unset or empty
 # Database file will be created at ./database.sqlite
+# SQLite automatically synchronizes schema in development
 ```
+
+### Database Schema Synchronization
+
+**Important:** For PostgreSQL/MySQL, schema synchronization is **disabled by default** to prevent accidental data loss.
+
+- **SQLite**: Automatically synchronizes schema in development (safe, file-based)
+- **PostgreSQL/MySQL**: Requires explicit `DB_SYNCHRONIZE=true` to enable schema sync
+
+**If you encounter schema conflicts:**
+
+1. **Option 1: Use migrations (recommended)**
+   ```bash
+   # Disable synchronize and use migrations
+   DB_SYNCHRONIZE=false npm run start:dev
+   npm run migration:generate -- src/database/migrations/InitialSchema
+   npm run migration:run
+   ```
+
+2. **Option 2: Drop and recreate schema (development only, data loss!)**
+   ```bash
+   # WARNING: This will delete all data!
+   DROP_SCHEMA=true DB_SYNCHRONIZE=true npm run start:dev
+   ```
+
+3. **Option 3: Manually fix the database**
+   - Connect to your database and remove conflicting constraints/tables
+   - Or use a fresh database
 
 ## Running the Application
 
