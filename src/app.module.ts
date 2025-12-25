@@ -11,6 +11,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { ClientsModule } from './clients/clients.module';
+import { ClientSourcesModule } from './client-sources/client-sources.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
     AuthModule,
     UsersModule,
     HealthModule,
+    ClientsModule,
+    ClientSourcesModule,
   ],
   providers: [
     {
