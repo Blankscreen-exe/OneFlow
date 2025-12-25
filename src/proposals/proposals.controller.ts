@@ -25,6 +25,7 @@ import {
   import { CreateProposalItemDto } from './dto/create-proposal-item.dto';
   import { UpdateProposalItemDto } from './dto/update-proposal-item.dto';
   import { ProposalQueryDto } from './dto/proposal-query.dto';
+  import { SendProposalDto } from './dto/send-proposal.dto';
   import { CurrentUser } from '../common/decorators/current-user.decorator';
   
   @ApiTags('proposals')
@@ -105,12 +106,17 @@ import {
     @ApiOperation({ summary: 'Send a proposal to the client' })
     @ApiParam({ name: 'id', description: 'Proposal UUID' })
     @ApiResponse({ status: 200, description: 'Proposal sent' })
-    @ApiResponse({ status: 400, description: 'Invalid status transition' })
+    @ApiResponse({ status: 400, description: 'Invalid status transition or invalid contact IDs' })
     send(
       @Param('id', ParseUUIDPipe) id: string,
       @CurrentUser() user: { id: string; email: string },
+      @Body() sendProposalDto: SendProposalDto,
     ) {
-      return this.proposalsService.send(id, user.id);
+      return this.proposalsService.send(
+        id,
+        user.id,
+        sendProposalDto.contactIds ?? [],
+      );
     }
   
     @Post(':id/accept')

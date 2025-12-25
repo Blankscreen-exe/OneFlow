@@ -8,7 +8,9 @@ import {
   Index,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
+  Relation,
 } from 'typeorm';
 
 @Entity('clients')
@@ -49,6 +51,11 @@ export class Client {
 
   @Column({ nullable: true, type: 'text' })
   notes: string;
+
+  @OneToMany('ClientContact', 'client', {
+    cascade: true,
+  })
+  contacts: Relation<any[]>;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -107,4 +107,10 @@ export class Proposal {
     eager: true,
   })
   items: Relation<ProposalItem[]>;
+
+  // Contact methods used to send this proposal
+  @OneToMany('ProposalContactMethod', 'proposal', {
+    cascade: true,
+  })
+  sentViaContacts: Relation<any[]>;
 }

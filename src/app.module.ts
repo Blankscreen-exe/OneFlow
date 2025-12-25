@@ -13,6 +13,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { ClientsModule } from './clients/clients.module';
 import { ClientSourcesModule } from './client-sources/client-sources.module';
+import { ClientContactsModule } from './client-contacts/client-contacts.module';
 import { ProposalsModule } from './proposals/proposals.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { ProposalsModule } from './proposals/proposals.module';
     HealthModule,
     ClientsModule,
     ClientSourcesModule,
+    ClientContactsModule,
     ProposalsModule,
   ],
   providers: [

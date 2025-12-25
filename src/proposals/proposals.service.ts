@@ -5,10 +5,12 @@ import {
     ForbiddenException,
   } from '@nestjs/common';
   import { InjectRepository } from '@nestjs/typeorm';
-  import { Repository } from 'typeorm';
+  import { Repository, In } from 'typeorm';
   import { Proposal, ProposalStatus } from './entities/proposal.entity';
   import { ProposalItem } from './entities/proposal-item.entity';
+  import { ProposalContactMethod } from './entities/proposal-contact-method.entity';
   import { Client } from '../clients/entities/client.entity';
+  import { ClientContact } from '../client-contacts/entities/client-contact.entity';
   import { CreateProposalDto } from './dto/create-proposal.dto';
   import { UpdateProposalDto } from './dto/update-proposal.dto';
   import { ProposalQueryDto } from './dto/proposal-query.dto';
@@ -32,8 +34,12 @@ import {
       private proposalsRepository: Repository<Proposal>,
       @InjectRepository(ProposalItem)
       private proposalItemsRepository: Repository<ProposalItem>,
+      @InjectRepository(ProposalContactMethod)
+      private proposalContactMethodsRepository: Repository<ProposalContactMethod>,
       @InjectRepository(Client)
       private clientsRepository: Repository<Client>,
+      @InjectRepository(ClientContact)
+      private clientContactsRepository: Repository<ClientContact>,
     ) {}
   
     /**
@@ -324,7 +330,39 @@ import {
     /**
      * Sends a proposal (changes status from draft to sent)
      */
-    async send(id: string, userId: string): Promise<Proposal> {
+    async send(
+      id: string,
+      userId: string,
+      contactIds: string[] = [],
+    ): Promise<Proposal> {
+      const proposal = await this.findOne(id, userId);
+
+      // Validate that all contact IDs belong to the proposal's client
+      if (contactIds.length > 0) {
+        const contacts = await this.clientContactsRepository.find({
+          where: {
+            id: In(contactIds),
+            clientId: proposal.clientId,
+          },
+        });
+
+        if (contacts.length !== contactIds.length) {
+          throw new BadRequestException(
+            'One or more contact IDs are invalid or do not belong to this client',
+          );
+        }
+
+        // Create ProposalContactMethod records
+        const contactMethods = contactIds.map((contactId) =>
+          this.proposalContactMethodsRepository.create({
+            proposalId: id,
+            contactId,
+          }),
+        );
+
+        await this.proposalContactMethodsRepository.save(contactMethods);
+      }
+
       return this.update(id, userId, { status: ProposalStatus.SENT });
     }
   
