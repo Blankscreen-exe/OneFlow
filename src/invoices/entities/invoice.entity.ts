@@ -13,6 +13,7 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { Client } from '../../clients/entities/client.entity';
 import type { Proposal } from '../../proposals/entities/proposal.entity';
+import { InvoiceItem } from './invoice-item.entity';
 
 export enum InvoiceStatus {
   DRAFT = 'draft',
@@ -110,10 +111,10 @@ export class Invoice {
   accessToken: string;
 
   // One invoice has many items
-  @OneToMany('InvoiceItem', 'invoice', {
+  @OneToMany(() => InvoiceItem, (item) => item.invoice, {
     cascade: true,
     eager: true,
   })
-  items: Relation<any[]>;
+  items: Relation<InvoiceItem[]>;
 }
 
