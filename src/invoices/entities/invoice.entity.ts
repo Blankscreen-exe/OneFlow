@@ -23,6 +23,7 @@ export enum InvoiceStatus {
 
 @Entity('invoices')
 @Index(['userId'])
+@Index(['agencyId'])
 @Index(['clientId'])
 @Index(['proposalId'])
 @Index(['status'])
@@ -30,13 +31,29 @@ export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // Foreign key to the user who owns this invoice (service provider)
-  @Column()
+  // Foreign key to the user who owns this invoice (service provider) - for backward compatibility
+  @Column({ nullable: true })
   userId: string;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User;
+
+  // Foreign key to the agency that owns this invoice
+  @Column({ nullable: true })
+  agencyId: string;
+
+  @ManyToOne('Agency', { nullable: true })
+  @JoinColumn({ name: 'agencyId' })
+  agency: Relation<any>;
+
+  // Foreign key to the user who created this invoice
+  @Column({ nullable: true })
+  createdById: string;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'createdById' })
+  createdBy: User;
 
   // Foreign key to the client this invoice is for
   @Column()

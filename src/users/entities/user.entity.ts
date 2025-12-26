@@ -5,6 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
   Relation,
 } from 'typeorm';
 import { Role } from '../../common/enums/role.enum';
@@ -41,6 +43,14 @@ export class User {
   // Relationships for service providers (when user is a service provider)
   @OneToMany(() => ClientServiceProvider, (csp) => csp.serviceProvider)
   serviceProviderRelationships: Relation<ClientServiceProvider[]>;
+
+  // Agency relationship (if user belongs to an agency)
+  @Column({ nullable: true })
+  agencyId?: string;
+
+  @ManyToOne('Agency', { nullable: true })
+  @JoinColumn({ name: 'agencyId' })
+  agency: Relation<any>;
 
   @CreateDateColumn()
   createdAt: Date;

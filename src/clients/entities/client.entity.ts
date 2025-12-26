@@ -20,12 +20,26 @@ export class Client {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ nullable: true })
   userId: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'userId' })
   user: User;
+
+  @Column({ nullable: true })
+  agencyId: string;
+
+  @ManyToOne('Agency', { nullable: true })
+  @JoinColumn({ name: 'agencyId' })
+  agency: Relation<any>;
+
+  @Column({ nullable: true })
+  createdById: string;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'createdById' })
+  createdBy: User;
 
   @Column()
   sourceId: string;
