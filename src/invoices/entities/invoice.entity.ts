@@ -1,0 +1,119 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  Index,
+  Relation,
+} from 'typeorm';
+import { User } from '../../users/entities/user.entity';
+import { Client } from '../../clients/entities/client.entity';
+import type { Proposal } from '../../proposals/entities/proposal.entity';
+
+export enum InvoiceStatus {
+  DRAFT = 'draft',
+  SENT = 'sent',
+  PAID = 'paid',
+}
+
+@Entity('invoices')
+@Index(['userId'])
+@Index(['clientId'])
+@Index(['proposalId'])
+@Index(['status'])
+export class Invoice {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  // Foreign key to the user who owns this invoice (service provider)
+  @Column()
+  userId: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'userId' })
+  user: User;
+
+  // Foreign key to the client this invoice is for
+  @Column()
+  clientId: string;
+
+  @ManyToOne(() => Client)
+  @JoinColumn({ name: 'clientId' })
+  client: Client;
+
+  // Foreign key to the proposal this invoice was generated from
+  @Column({ nullable: true })
+  proposalId: string;
+
+  @ManyToOne('Proposal', { nullable: true })
+  @JoinColumn({ name: 'proposalId' })
+  proposal: Relation<Proposal>;
+
+  // Invoice number (unique per user)
+  @Column()
+  invoiceNumber: string;
+
+  // Current status of the invoice
+  @Column({
+    type: 'varchar',
+    default: InvoiceStatus.DRAFT,
+  })
+  status: InvoiceStatus;
+
+  // Calculated fields for pricing
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  subtotal: number;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  taxRate: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  taxAmount: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  total: number;
+
+  // Due date
+  @Column({ type: 'date', nullable: true })
+  dueDate: Date;
+
+  // Stripe payment link ID
+  @Column({ nullable: true })
+  stripePaymentLinkId: string;
+
+  // Additional notes
+  @Column({ type: 'text', nullable: true })
+  notes: string;
+
+  // Timestamps
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  // When the invoice was sent
+  @Column({ type: 'timestamp', nullable: true })
+  sentAt: Date;
+
+  // When the invoice was paid
+  @Column({ type: 'timestamp', nullable: true })
+  paidAt: Date;
+
+  // Unique token for public invoice access
+  @Column({ unique: true, nullable: true })
+  @Index()
+  accessToken: string;
+
+  // One invoice has many items
+  @OneToMany('InvoiceItem', 'invoice', {
+    cascade: true,
+    eager: true,
+  })
+  items: Relation<any[]>;
+}
+

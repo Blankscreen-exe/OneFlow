@@ -11,13 +11,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { PasswordResetService } from './password-reset.service';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { User } from '../users/entities/user.entity';
+import { ClientServiceProvider } from '../users/entities/client-service-provider.entity';
 
 @Module({
   imports: [
     UsersModule,
     EmailModule.forRoot(),
     PassportModule,
-    TypeOrmModule.forFeature([User, PasswordResetToken]),
+    TypeOrmModule.forFeature([User, PasswordResetToken, ClientServiceProvider]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

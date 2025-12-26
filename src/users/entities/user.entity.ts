@@ -4,8 +4,11 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
+  Relation,
 } from 'typeorm';
 import { Role } from '../../common/enums/role.enum';
+import { ClientServiceProvider } from './client-service-provider.entity';
 
 @Entity('users')
 export class User {
@@ -30,6 +33,14 @@ export class User {
     default: Role.SERVICE_PROVIDER,
   })
   role: Role;
+
+  // Relationships for clients (when user is a client)
+  @OneToMany(() => ClientServiceProvider, (csp) => csp.client)
+  clientRelationships: Relation<ClientServiceProvider[]>;
+
+  // Relationships for service providers (when user is a service provider)
+  @OneToMany(() => ClientServiceProvider, (csp) => csp.serviceProvider)
+  serviceProviderRelationships: Relation<ClientServiceProvider[]>;
 
   @CreateDateColumn()
   createdAt: Date;

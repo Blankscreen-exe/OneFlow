@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -18,6 +19,8 @@ import { PasswordResetService } from './password-reset.service';
 import { EmailService } from '../email/email.service';
 import { User } from '../users/entities/user.entity';
 import { Role } from '../common/enums/role.enum';
+import { RegisterClientDto } from './dto/register-client.dto';
+import { ClientServiceProviderService } from '../users/services/client-service-provider.service';
 
 @Injectable()
 export class AuthService {
@@ -29,10 +32,69 @@ export class AuthService {
     private usersRepository: Repository<User>,
     private passwordResetService: PasswordResetService,
     private emailService: EmailService,
+    private clientServiceProviderService: ClientServiceProviderService,
   ) {}
 
   async register(registerDto: RegisterDto) {
     const user = await this.usersService.create(registerDto);
+    const { password, ...result } = user;
+    return {
+      ...result,
+      accessToken: this.generateToken(user.id, user.email, user.role),
+    };
+  }
+
+  async registerClient(registerClientDto: RegisterClientDto) {
+    // Check if email already exists
+    const existingUser = await this.usersService.findByEmail(registerClientDto.email);
+
+    let user: User;
+
+    if (existingUser) {
+      // If user exists and is CLIENT role, link to new SP
+      if (existingUser.role === Role.CLIENT) {
+        // Check if already linked to this SP
+        const isLinked = await this.clientServiceProviderService.isClientLinkedToSP(
+          existingUser.id,
+          registerClientDto.serviceProviderId,
+        );
+
+        if (!isLinked) {
+          // Link to new SP
+          await this.clientServiceProviderService.linkClientToServiceProvider(
+            existingUser.id,
+            registerClientDto.serviceProviderId,
+          );
+        }
+
+        user = existingUser;
+      } else {
+        // User exists with different role
+        throw new ConflictException(
+          'Email already registered with a different account type',
+        );
+      }
+    } else {
+      // Create new user with CLIENT role
+      const hashedPassword = await bcrypt.hash(registerClientDto.password, 10);
+
+      user = this.usersRepository.create({
+        email: registerClientDto.email,
+        password: hashedPassword,
+        firstName: registerClientDto.firstName,
+        lastName: registerClientDto.lastName,
+        role: Role.CLIENT,
+      });
+
+      user = await this.usersRepository.save(user);
+
+      // Link to service provider
+      await this.clientServiceProviderService.linkClientToServiceProvider(
+        user.id,
+        registerClientDto.serviceProviderId,
+      );
+    }
+
     const { password, ...result } = user;
     return {
       ...result,

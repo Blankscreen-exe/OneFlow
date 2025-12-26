@@ -15,6 +15,7 @@ import { ClientsModule } from './clients/clients.module';
 import { ClientSourcesModule } from './client-sources/client-sources.module';
 import { ClientContactsModule } from './client-contacts/client-contacts.module';
 import { ProposalsModule } from './proposals/proposals.module';
+import { InvoicesModule } from './invoices/invoices.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ProposalsModule } from './proposals/proposals.module';
     ClientSourcesModule,
     ClientContactsModule,
     ProposalsModule,
+    InvoicesModule,
   ],
   providers: [
     {

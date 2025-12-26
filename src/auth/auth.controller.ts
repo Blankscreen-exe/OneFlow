@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RegisterClientDto } from './dto/register-client.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from '../common/decorators/public.decorator';
@@ -17,6 +18,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
+  }
+
+  @Post('register-client')
+  @Public()
+  @ApiOperation({ summary: 'Register a new client account with service provider link' })
+  registerClient(@Body() registerClientDto: RegisterClientDto) {
+    return this.authService.registerClient(registerClientDto);
   }
 
   @Post('login')
