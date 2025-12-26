@@ -27,6 +27,7 @@ export enum InvoiceStatus {
 @Index(['clientId'])
 @Index(['proposalId'])
 @Index(['status'])
+@Index(['userId', 'invoiceNumber'], { unique: true })
 export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id: string;

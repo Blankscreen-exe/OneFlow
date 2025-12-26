@@ -41,6 +41,9 @@ export default () => {
       anthropicApiKey: process.env.ANTHROPIC_API_KEY,
       anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229',
     },
+    invoice: {
+      dueDays: parseInt(process.env.INVOICE_DUE_DAYS || '30', 10),
+    },
   };
 };
 
