@@ -17,6 +17,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { PasswordResetService } from './password-reset.service';
 import { EmailService } from '../email/email.service';
 import { User } from '../users/entities/user.entity';
+import { Role } from '../common/enums/role.enum';
 
 @Injectable()
 export class AuthService {
@@ -35,7 +36,7 @@ export class AuthService {
     const { password, ...result } = user;
     return {
       ...result,
-      accessToken: this.generateToken(user.id, user.email),
+      accessToken: this.generateToken(user.id, user.email, user.role),
     };
   }
 
@@ -56,7 +57,7 @@ export class AuthService {
     const { password, ...result } = user;
     return {
       ...result,
-      accessToken: this.generateToken(user.id, user.email),
+      accessToken: this.generateToken(user.id, user.email, user.role),
     };
   }
 
@@ -122,8 +123,8 @@ export class AuthService {
     };
   }
 
-  private generateToken(userId: string, email: string): string {
-    const payload = { email, sub: userId };
+  private generateToken(userId: string, email: string, role: Role): string {
+    const payload = { email, sub: userId, role };
     return this.jwtService.sign(payload, {
       expiresIn: this.configService.get<string>('jwt.expiresIn'),
     });

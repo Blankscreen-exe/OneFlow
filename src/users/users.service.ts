@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
+import { Role } from '../common/enums/role.enum';
 
 @Injectable()
 export class UsersService {
@@ -26,6 +27,7 @@ export class UsersService {
     const user = this.usersRepository.create({
       ...createUserDto,
       password: hashedPassword,
+      role: createUserDto.role || Role.SERVICE_PROVIDER,
     });
 
     return this.usersRepository.save(user);
@@ -45,7 +47,7 @@ export class UsersService {
 
   async findAll(): Promise<User[]> {
     return this.usersRepository.find({
-      select: ['id', 'email', 'firstName', 'lastName', 'createdAt', 'updatedAt'],
+      select: ['id', 'email', 'firstName', 'lastName', 'role', 'createdAt', 'updatedAt'],
     });
   }
 }
