@@ -34,6 +34,13 @@ export default () => {
     frontend: {
       url: process.env.FRONTEND_URL || 'http://localhost:3000',
     },
+    ai: {
+      provider: process.env.AI_PROVIDER || 'console',
+      openaiApiKey: process.env.OPENAI_API_KEY,
+      openaiModel: process.env.OPENAI_MODEL || 'gpt-4',
+      anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+      anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229',
+    },
   };
 };
 

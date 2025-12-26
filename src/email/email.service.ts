@@ -20,5 +20,14 @@ export class EmailService {
 
     await this.emailProvider.sendEmail(to, subject, html, text);
   }
+
+  async sendEmail(
+    to: string,
+    subject: string,
+    html: string,
+    text: string,
+  ): Promise<void> {
+    await this.emailProvider.sendEmail(to, subject, html, text);
+  }
 }
 

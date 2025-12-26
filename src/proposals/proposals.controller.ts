@@ -26,7 +26,14 @@ import {
   import { UpdateProposalItemDto } from './dto/update-proposal-item.dto';
   import { ProposalQueryDto } from './dto/proposal-query.dto';
   import { SendProposalDto } from './dto/send-proposal.dto';
+  import { PublicProposalResponseDto } from './dto/public-proposal-response.dto';
+  import { AIGenerationRequestDto } from './dto/ai-generation-request.dto';
+  import { SendingStatusResponseDto } from './dto/sending-status-response.dto';
   import { CurrentUser } from '../common/decorators/current-user.decorator';
+  import { ProposalAcceptanceService } from './services/proposal-acceptance.service';
+  import { AIProposalService } from './services/ai-proposal.service';
+  import { Public } from '../common/decorators/public.decorator';
+  import { NotFoundException } from '@nestjs/common';
   
   @ApiTags('proposals')
   @ApiBearerAuth()
@@ -35,6 +42,8 @@ import {
     constructor(
       private readonly proposalsService: ProposalsService,
       private readonly proposalItemsService: ProposalItemsService,
+      private readonly proposalAcceptanceService: ProposalAcceptanceService,
+      private readonly aiProposalService: AIProposalService,
     ) {}
   
     // ==================== PROPOSAL ENDPOINTS ====================
@@ -188,5 +197,94 @@ import {
       @CurrentUser() user: { id: string; email: string },
     ) {
       return this.proposalItemsService.remove(id, itemId, user.id);
+    }
+
+    // ==================== PUBLIC ENDPOINTS (NO AUTH) ====================
+
+    @Get('public/:token')
+    @Public()
+    @ApiOperation({ summary: 'Get proposal by acceptance token (public, no auth)' })
+    @ApiParam({ name: 'token', description: 'Acceptance token' })
+    @ApiResponse({ status: 200, description: 'Proposal details', type: PublicProposalResponseDto })
+    @ApiResponse({ status: 404, description: 'Proposal not found' })
+    getPublicProposal(@Param('token') token: string) {
+      return this.proposalAcceptanceService.findByToken(token);
+    }
+
+    @Post('public/:token/accept')
+    @Public()
+    @ApiOperation({ summary: 'Accept a proposal by token (public, no auth)' })
+    @ApiParam({ name: 'token', description: 'Acceptance token' })
+    @ApiResponse({ status: 200, description: 'Proposal accepted' })
+    @ApiResponse({ status: 400, description: 'Invalid proposal or already accepted' })
+    @ApiResponse({ status: 404, description: 'Proposal not found' })
+    acceptPublicProposal(@Param('token') token: string) {
+      return this.proposalAcceptanceService.accept(token);
+    }
+
+    // ==================== SENDING STATUS ENDPOINT ====================
+
+    @Get(':id/sending-status')
+    @ApiOperation({ summary: 'Get delivery status for all contact methods' })
+    @ApiParam({ name: 'id', description: 'Proposal UUID' })
+    @ApiResponse({ status: 200, description: 'Sending status', type: SendingStatusResponseDto })
+    @ApiResponse({ status: 404, description: 'Proposal not found' })
+    async getSendingStatus(
+      @Param('id', ParseUUIDPipe) id: string,
+      @CurrentUser() user: { id: string; email: string },
+    ): Promise<SendingStatusResponseDto> {
+      await this.proposalsService.findOne(id, user.id);
+      
+      // Get contact methods with relations
+      const contactMethods = await this.proposalsService.getSendingStatus(id);
+
+      const statuses = contactMethods.map((cm: any) => ({
+        id: cm.id,
+        contactId: cm.contactId,
+        contactType: cm.contact?.type || 'unknown',
+        contactValue: cm.contact?.value || 'unknown',
+        deliveryStatus: cm.deliveryStatus,
+        sentAt: cm.sentAt,
+        acceptedVia: cm.acceptedVia,
+        errorMessage: cm.errorMessage,
+      }));
+
+      return {
+        proposalId: id,
+        contactMethods: statuses,
+        totalSent: contactMethods.length,
+        totalDelivered: contactMethods.filter((cm: any) => cm.deliveryStatus === 'delivered').length,
+        totalFailed: contactMethods.filter((cm: any) => cm.deliveryStatus === 'failed').length,
+      };
+    }
+
+    // ==================== AI GENERATION ENDPOINTS ====================
+
+    @Post('generate-ai')
+    @ApiOperation({ summary: 'Generate a proposal using AI (async)' })
+    @ApiResponse({ status: 201, description: 'AI generation started', schema: { properties: { jobId: { type: 'string' } } } })
+    @ApiResponse({ status: 400, description: 'Invalid request' })
+    generateAI(
+      @CurrentUser() user: { id: string; email: string },
+      @Body() dto: AIGenerationRequestDto,
+    ) {
+      return this.aiProposalService.generateProposal(
+        user.id,
+        dto.clientId,
+        dto.prompt,
+      );
+    }
+
+    @Get(':id/generation-status')
+    @ApiOperation({ summary: 'Get AI generation status' })
+    @ApiParam({ name: 'id', description: 'Job ID (from generate-ai response)' })
+    @ApiResponse({ status: 200, description: 'Generation status' })
+    @ApiResponse({ status: 404, description: 'Job not found' })
+    getGenerationStatus(@Param('id') jobId: string) {
+      const status = this.aiProposalService.getGenerationStatus(jobId);
+      if (!status) {
+        throw new NotFoundException('Generation job not found');
+      }
+      return status;
     }
   }

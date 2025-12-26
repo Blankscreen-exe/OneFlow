@@ -101,6 +101,11 @@ export class Proposal {
   @Column({ type: 'timestamp', nullable: true })
   rejectedAt: Date;
 
+  // Unique token for public proposal access
+  @Column({ unique: true, nullable: true })
+  @Index()
+  acceptanceToken: string;
+
   // One proposal has many items
   @OneToMany('ProposalItem', 'proposal', {
     cascade: true,

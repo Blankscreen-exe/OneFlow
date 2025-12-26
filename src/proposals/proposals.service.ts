@@ -14,6 +14,8 @@ import {
   import { CreateProposalDto } from './dto/create-proposal.dto';
   import { UpdateProposalDto } from './dto/update-proposal.dto';
   import { ProposalQueryDto } from './dto/proposal-query.dto';
+  import { ProposalSendingService } from './services/proposal-sending.service';
+  import { ProposalAcceptanceService } from './services/proposal-acceptance.service';
   
   export interface PaginatedResult<T> {
     data: T[];
@@ -40,6 +42,8 @@ import {
       private clientsRepository: Repository<Client>,
       @InjectRepository(ClientContact)
       private clientContactsRepository: Repository<ClientContact>,
+      private proposalSendingService: ProposalSendingService,
+      private proposalAcceptanceService: ProposalAcceptanceService,
     ) {}
   
     /**
@@ -337,33 +341,46 @@ import {
     ): Promise<Proposal> {
       const proposal = await this.findOne(id, userId);
 
-      // Validate that all contact IDs belong to the proposal's client
-      if (contactIds.length > 0) {
-        const contacts = await this.clientContactsRepository.find({
-          where: {
-            id: In(contactIds),
-            clientId: proposal.clientId,
-          },
-        });
+      // Ensure proposal has acceptance token
+      await this.proposalAcceptanceService.ensureAcceptanceToken(proposal);
 
-        if (contacts.length !== contactIds.length) {
+      // Send via contact methods if provided
+      if (contactIds.length > 0) {
+        const result = await this.proposalSendingService.sendViaContacts(
+          id,
+          contactIds,
+        );
+
+        if (result.failed > 0 && result.success === 0) {
+          // All methods failed
           throw new BadRequestException(
-            'One or more contact IDs are invalid or do not belong to this client',
+            `Failed to send proposal: ${result.errors.join('; ')}`,
           );
         }
 
-        // Create ProposalContactMethod records
-        const contactMethods = contactIds.map((contactId) =>
-          this.proposalContactMethodsRepository.create({
-            proposalId: id,
-            contactId,
-          }),
-        );
-
-        await this.proposalContactMethodsRepository.save(contactMethods);
+        // Log partial failures
+        if (result.failed > 0) {
+          // Some methods failed but at least one succeeded
+          // Proposal is still considered sent
+        }
       }
 
-      return this.update(id, userId, { status: ProposalStatus.SENT });
+      // Update proposal status and sentAt timestamp
+      proposal.status = ProposalStatus.SENT;
+      proposal.sentAt = new Date();
+      await this.proposalsRepository.save(proposal);
+
+      return this.findOne(id, userId);
+    }
+
+    /**
+     * Gets sending status for a proposal
+     */
+    async getSendingStatus(proposalId: string): Promise<ProposalContactMethod[]> {
+      return this.proposalContactMethodsRepository.find({
+        where: { proposalId },
+        relations: ['contact'],
+      });
     }
   
     /**
