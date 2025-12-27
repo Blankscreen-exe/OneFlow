@@ -14,8 +14,15 @@ import {
   import { CreateProposalDto } from './dto/create-proposal.dto';
   import { UpdateProposalDto } from './dto/update-proposal.dto';
   import { ProposalQueryDto } from './dto/proposal-query.dto';
-  import { ProposalSendingService } from './services/proposal-sending.service';
-  import { ProposalAcceptanceService } from './services/proposal-acceptance.service';
+import { ProposalSendingService } from './services/proposal-sending.service';
+import { ProposalAcceptanceService } from './services/proposal-acceptance.service';
+import { TimelineService } from '../timeline/services/timeline.service';
+import { TimelineEventType } from '../timeline/enums/timeline-event-type.enum';
+import { RelatedEntityType } from '../timeline/enums/related-entity-type.enum';
+import {
+  formatProposalCreatedEvent,
+  formatProposalSentEvent,
+} from '../timeline/utils/event-formatter.util';
   
   export interface PaginatedResult<T> {
     data: T[];
@@ -44,6 +51,7 @@ import {
       private clientContactsRepository: Repository<ClientContact>,
       private proposalSendingService: ProposalSendingService,
       private proposalAcceptanceService: ProposalAcceptanceService,
+      private timelineService: TimelineService,
     ) {}
   
     /**
@@ -171,8 +179,27 @@ import {
         await this.proposalItemsRepository.save(items);
       }
   
-      // Recalculate totals and return
-      return this.recalculateTotals(savedProposal.id);
+      // Recalculate totals
+      const finalProposal = await this.recalculateTotals(savedProposal.id);
+
+      // Create timeline event
+      const { title, description } = formatProposalCreatedEvent(finalProposal);
+      await this.timelineService.createEvent(
+        finalProposal.clientId,
+        userId,
+        TimelineEventType.PROPOSAL_CREATED,
+        title,
+        description,
+        {
+          proposalId: finalProposal.id,
+          proposalTitle: finalProposal.title,
+          totalAmount: Number(finalProposal.total),
+        },
+        RelatedEntityType.PROPOSAL,
+        finalProposal.id,
+      );
+
+      return finalProposal;
     }
   
     /**
@@ -370,7 +397,26 @@ import {
       proposal.sentAt = new Date();
       await this.proposalsRepository.save(proposal);
 
-      return this.findOne(id, userId);
+      const updatedProposal = await this.findOne(id, userId);
+
+      // Create timeline event
+      const { title, description } = formatProposalSentEvent(updatedProposal);
+      await this.timelineService.createEvent(
+        updatedProposal.clientId,
+        userId,
+        TimelineEventType.PROPOSAL_SENT,
+        title,
+        description,
+        {
+          proposalId: updatedProposal.id,
+          proposalTitle: updatedProposal.title,
+          totalAmount: Number(updatedProposal.total),
+        },
+        RelatedEntityType.PROPOSAL,
+        updatedProposal.id,
+      );
+
+      return updatedProposal;
     }
 
     /**

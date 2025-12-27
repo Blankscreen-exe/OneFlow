@@ -17,6 +17,7 @@ import { ClientContactsModule } from './client-contacts/client-contacts.module';
 import { ProposalsModule } from './proposals/proposals.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PaymentsModule } from './payments/payments.module';
+import { TimelineModule } from './timeline/timeline.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { PaymentsModule } from './payments/payments.module';
     ProposalsModule,
     InvoicesModule,
     PaymentsModule,
+    TimelineModule,
   ],
   providers: [
     {

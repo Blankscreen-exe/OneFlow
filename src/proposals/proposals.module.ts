@@ -7,6 +7,7 @@ import { Client } from '../clients/entities/client.entity';
 import { ClientContact } from '../client-contacts/entities/client-contact.entity';
 import { EmailModule } from '../email/email.module';
 import { AIModule } from '../ai/ai.module';
+import { TimelineModule } from '../timeline/timeline.module';
 import { ProposalsService } from './proposals.service';
 import { ProposalItemsService } from './proposal-items.service';
 import { ProposalSendingService } from './services/proposal-sending.service';
@@ -27,6 +28,7 @@ import { ProposalsController } from './proposals.controller';
     ]),
     EmailModule.forRoot(),
     AIModule.forRoot(),
+    TimelineModule,
   ],
   controllers: [ProposalsController],
   providers: [

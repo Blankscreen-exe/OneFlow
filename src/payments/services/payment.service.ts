@@ -13,6 +13,10 @@ import { Agency } from '../../agencies/entities/agency.entity';
 import { PaymentProviderFactory } from './payment-provider.factory';
 import { PaymentProviderType } from '../enums/payment-provider.enum';
 import { PaymentProvider } from '../interfaces/payment-provider.interface';
+import { TimelineService } from '../../timeline/services/timeline.service';
+import { TimelineEventType } from '../../timeline/enums/timeline-event-type.enum';
+import { RelatedEntityType } from '../../timeline/enums/related-entity-type.enum';
+import { formatPaymentReceivedEvent } from '../../timeline/utils/event-formatter.util';
 
 @Injectable()
 export class PaymentService {
@@ -26,6 +30,7 @@ export class PaymentService {
     @InjectRepository(Agency)
     private agenciesRepository: Repository<Agency>,
     private providerFactory: PaymentProviderFactory,
+    private timelineService: TimelineService,
   ) {}
 
   /**
@@ -193,6 +198,32 @@ export class PaymentService {
 
     // Update invoice amounts and status
     await this.calculateInvoiceAmounts(payment.invoiceId);
+
+    // Create timeline event
+    const invoice = await this.invoicesRepository.findOne({
+      where: { id: payment.invoiceId },
+      relations: ['client'],
+    });
+
+    if (invoice) {
+      const { title, description } = formatPaymentReceivedEvent(payment, invoice);
+      await this.timelineService.createEvent(
+        invoice.clientId,
+        invoice.userId,
+        TimelineEventType.PAYMENT_RECEIVED,
+        title,
+        description,
+        {
+          paymentId: payment.id,
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          amount: Number(payment.amount),
+          paymentProvider: payment.paymentProvider || paymentProvider,
+        },
+        RelatedEntityType.PAYMENT,
+        payment.id,
+      );
+    }
 
     return payment;
   }

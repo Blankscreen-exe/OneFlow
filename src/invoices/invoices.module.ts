@@ -10,6 +10,7 @@ import { InvoiceNumberService } from './services/invoice-number.service';
 import { InvoicesService } from './services/invoices.service';
 import { InvoicesController } from './invoices.controller';
 import { EmailModule } from '../email/email.module';
+import { TimelineModule } from '../timeline/timeline.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { EmailModule } from '../email/email.module';
       ProposalItem,
     ]),
     EmailModule.forRoot(),
+    TimelineModule,
   ],
   controllers: [InvoicesController],
   providers: [

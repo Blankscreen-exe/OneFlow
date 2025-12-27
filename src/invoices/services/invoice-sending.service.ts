@@ -6,6 +6,10 @@ import { Invoice } from '../entities/invoice.entity';
 import { InvoiceAccessService } from './invoice-access.service';
 import { EmailService } from '../../email/email.service';
 import { InvoiceStatus } from '../entities/invoice.entity';
+import { TimelineService } from '../../timeline/services/timeline.service';
+import { TimelineEventType } from '../../timeline/enums/timeline-event-type.enum';
+import { RelatedEntityType } from '../../timeline/enums/related-entity-type.enum';
+import { formatInvoiceSentEvent } from '../../timeline/utils/event-formatter.util';
 
 @Injectable()
 export class InvoiceSendingService {
@@ -17,6 +21,7 @@ export class InvoiceSendingService {
     private invoiceAccessService: InvoiceAccessService,
     private emailService: EmailService,
     private configService: ConfigService,
+    private timelineService: TimelineService,
   ) {}
 
   /**
@@ -58,6 +63,24 @@ export class InvoiceSendingService {
       invoice.status = InvoiceStatus.SENT;
       invoice.sentAt = new Date();
       await this.invoicesRepository.save(invoice);
+
+      // Create timeline event
+      const { title, description } = formatInvoiceSentEvent(invoice);
+      await this.timelineService.createEvent(
+        invoice.clientId,
+        invoice.userId,
+        TimelineEventType.INVOICE_SENT,
+        title,
+        description,
+        {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          totalAmount: Number(invoice.total),
+          recipientEmail,
+        },
+        RelatedEntityType.INVOICE,
+        invoice.id,
+      );
 
       this.logger.log(
         `Invoice ${invoice.id} sent via email to ${recipientEmail}`,

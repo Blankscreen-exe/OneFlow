@@ -11,11 +11,13 @@ import { PaymentService } from './services/payment.service';
 import { StripeWebhookService } from './services/stripe-webhook.service';
 import { PaymentProviderFactory } from './services/payment-provider.factory';
 import { InvoicesModule } from '../invoices/invoices.module';
+import { TimelineModule } from '../timeline/timeline.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Payment, User, Agency, Invoice]),
     InvoicesModule,
+    TimelineModule,
   ],
   controllers: [PaymentsController],
   providers: [

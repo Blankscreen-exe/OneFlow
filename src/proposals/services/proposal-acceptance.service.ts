@@ -3,6 +3,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Proposal, ProposalStatus } from '../entities/proposal.entity';
 import { ProposalContactMethod } from '../entities/proposal-contact-method.entity';
+import { TimelineService } from '../../timeline/services/timeline.service';
+import { TimelineEventType } from '../../timeline/enums/timeline-event-type.enum';
+import { RelatedEntityType } from '../../timeline/enums/related-entity-type.enum';
+import {
+  formatProposalAcceptedEvent,
+  formatProposalRejectedEvent,
+} from '../../timeline/utils/event-formatter.util';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -12,6 +19,7 @@ export class ProposalAcceptanceService {
     private proposalsRepository: Repository<Proposal>,
     @InjectRepository(ProposalContactMethod)
     private proposalContactMethodsRepository: Repository<ProposalContactMethod>,
+    private timelineService: TimelineService,
   ) {}
 
   /**
@@ -93,6 +101,58 @@ export class ProposalAcceptanceService {
         await this.proposalContactMethodsRepository.save(contactMethod);
       }
     }
+
+    // Create timeline event (use proposal.userId as the event creator)
+    const { title, description } = formatProposalAcceptedEvent(proposal);
+    await this.timelineService.createEvent(
+      proposal.clientId,
+      proposal.userId,
+      TimelineEventType.PROPOSAL_ACCEPTED,
+      title,
+      description,
+      {
+        proposalId: proposal.id,
+        proposalTitle: proposal.title,
+        totalAmount: Number(proposal.total),
+      },
+      RelatedEntityType.PROPOSAL,
+      proposal.id,
+    );
+
+    return proposal;
+  }
+
+  /**
+   * Rejects a proposal
+   */
+  async reject(token: string): Promise<Proposal> {
+    const proposal = await this.findByToken(token);
+    
+    if (proposal.status !== ProposalStatus.SENT) {
+      throw new BadRequestException('Only sent proposals can be rejected');
+    }
+
+    // Update proposal status
+    proposal.status = ProposalStatus.REJECTED;
+    proposal.rejectedAt = new Date();
+    await this.proposalsRepository.save(proposal);
+
+    // Create timeline event (use proposal.userId as the event creator)
+    const { title, description } = formatProposalRejectedEvent(proposal);
+    await this.timelineService.createEvent(
+      proposal.clientId,
+      proposal.userId,
+      TimelineEventType.PROPOSAL_REJECTED,
+      title,
+      description,
+      {
+        proposalId: proposal.id,
+        proposalTitle: proposal.title,
+        totalAmount: Number(proposal.total),
+      },
+      RelatedEntityType.PROPOSAL,
+      proposal.id,
+    );
 
     return proposal;
   }

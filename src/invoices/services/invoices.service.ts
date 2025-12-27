@@ -14,6 +14,13 @@ import { ProposalItem } from '../../proposals/entities/proposal-item.entity';
 import { InvoiceNumberService } from './invoice-number.service';
 import { InvoiceSendingService } from './invoice-sending.service';
 import { InvoiceAccessService } from './invoice-access.service';
+import { TimelineService } from '../../timeline/services/timeline.service';
+import { TimelineEventType } from '../../timeline/enums/timeline-event-type.enum';
+import { RelatedEntityType } from '../../timeline/enums/related-entity-type.enum';
+import {
+  formatInvoiceCreatedEvent,
+  formatInvoiceSentEvent,
+} from '../../timeline/utils/event-formatter.util';
 
 export interface PaginatedResult<T> {
   data: T[];
@@ -42,6 +49,7 @@ export class InvoicesService {
     private invoiceSendingService: InvoiceSendingService,
     private invoiceAccessService: InvoiceAccessService,
     private configService: ConfigService,
+    private timelineService: TimelineService,
   ) {}
 
   /**
@@ -169,8 +177,27 @@ export class InvoicesService {
       await this.invoiceItemsRepository.save(invoiceItems);
     }
 
-    // Return invoice with items
-    return this.findOne(savedInvoice.id, userId);
+    const finalInvoice = await this.findOne(savedInvoice.id, userId);
+
+    // Create timeline event
+    const { title, description } = formatInvoiceCreatedEvent(finalInvoice);
+    await this.timelineService.createEvent(
+      finalInvoice.clientId,
+      userId,
+      TimelineEventType.INVOICE_CREATED,
+      title,
+      description,
+      {
+        invoiceId: finalInvoice.id,
+        invoiceNumber: finalInvoice.invoiceNumber,
+        totalAmount: Number(finalInvoice.total),
+        proposalId: finalInvoice.proposalId,
+      },
+      RelatedEntityType.INVOICE,
+      finalInvoice.id,
+    );
+
+    return finalInvoice;
   }
 
   /**
@@ -309,6 +336,24 @@ export class InvoicesService {
         // Log error but don't fail the operation
         console.error('Failed to send invoice email:', error);
       }
+    } else {
+      // Create timeline event if invoice was just marked as sent without email
+      const updatedInvoice = await this.findOne(id, userId);
+      const { title, description } = formatInvoiceSentEvent(updatedInvoice);
+      await this.timelineService.createEvent(
+        updatedInvoice.clientId,
+        userId,
+        TimelineEventType.INVOICE_SENT,
+        title,
+        description,
+        {
+          invoiceId: updatedInvoice.id,
+          invoiceNumber: updatedInvoice.invoiceNumber,
+          totalAmount: Number(updatedInvoice.total),
+        },
+        RelatedEntityType.INVOICE,
+        updatedInvoice.id,
+      );
     }
 
     return this.findOne(id, userId);
