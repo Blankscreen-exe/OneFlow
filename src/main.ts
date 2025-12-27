@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { json } from 'express';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 
@@ -19,6 +20,14 @@ async function bootstrap() {
     origin: corsOrigin,
     credentials: true,
   });
+
+  // Raw body parsing for Stripe webhooks
+  app.use('/api/payments/webhooks/stripe', json({ verify: (req: any, res, buf) => {
+    if (Buffer.isBuffer(buf)) {
+      req.rawBody = buf;
+    }
+    return true;
+  }}));
 
   // API prefix
   app.setGlobalPrefix('api');

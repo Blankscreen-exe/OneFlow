@@ -16,6 +16,7 @@ import { ClientSourcesModule } from './client-sources/client-sources.module';
 import { ClientContactsModule } from './client-contacts/client-contacts.module';
 import { ProposalsModule } from './proposals/proposals.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { InvoicesModule } from './invoices/invoices.module';
     ClientContactsModule,
     ProposalsModule,
     InvoicesModule,
+    PaymentsModule,
   ],
   providers: [
     {

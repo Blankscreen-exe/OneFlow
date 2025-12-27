@@ -44,6 +44,14 @@ export default () => {
     invoice: {
       dueDays: parseInt(process.env.INVOICE_DUE_DAYS || '30', 10),
     },
+    stripe: {
+      secretKey: process.env.STRIPE_SECRET_KEY,
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      defaultPlatformFeeRate: parseFloat(
+        process.env.STRIPE_DEFAULT_PLATFORM_FEE_RATE || '10',
+      ),
+    },
   };
 };
 

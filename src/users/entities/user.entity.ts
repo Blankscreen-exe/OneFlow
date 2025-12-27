@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { Role } from '../../common/enums/role.enum';
 import { ClientServiceProvider } from './client-service-provider.entity';
+import { StripeOnboardingStatus } from '../../payments/enums/stripe-onboarding-status.enum';
 
 @Entity('users')
 export class User {
@@ -51,6 +52,29 @@ export class User {
   @ManyToOne('Agency', { nullable: true })
   @JoinColumn({ name: 'agencyId' })
   agency: Relation<any>;
+
+  // Stripe Connect account ID
+  @Column({ unique: true, nullable: true })
+  stripeAccountId: string;
+
+  // Stripe onboarding status
+  @Column({
+    type: 'varchar',
+    default: StripeOnboardingStatus.NOT_STARTED,
+  })
+  stripeOnboardingStatus: StripeOnboardingStatus;
+
+  // Platform fee rate (percentage, default 10%)
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 10.0 })
+  platformFeeRate: number;
+
+  // Stripe onboarding link (temporary, expires)
+  @Column({ nullable: true })
+  stripeOnboardingLink: string;
+
+  // When onboarding was completed
+  @Column({ type: 'timestamp', nullable: true })
+  stripeOnboardingCompletedAt: Date;
 
   @CreateDateColumn()
   createdAt: Date;

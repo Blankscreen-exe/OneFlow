@@ -13,6 +13,7 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { Client } from '../../clients/entities/client.entity';
 import type { Proposal } from '../../proposals/entities/proposal.entity';
+import type { Payment } from '../../payments/entities/payment.entity';
 import { InvoiceItem } from './invoice-item.entity';
 
 export enum InvoiceStatus {
@@ -96,6 +97,14 @@ export class Invoice {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   total: number;
 
+  // Amount paid (sum of all succeeded payments minus refunds)
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  amountPaid: number;
+
+  // Amount due (total - amountPaid)
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  amountDue: number;
+
   // Due date
   @Column({ type: 'date', nullable: true })
   dueDate: Date;
@@ -134,5 +143,9 @@ export class Invoice {
     eager: true,
   })
   items: Relation<InvoiceItem[]>;
+
+  // One invoice has many payments
+  @OneToMany('Payment', 'invoice')
+  payments: Relation<Payment[]>;
 }
 

@@ -52,29 +52,32 @@ export class UpdateOwnershipToAgency1766705000000 implements MigrationInterface 
             ALTER TABLE "proposals" ALTER COLUMN "userId" DROP NOT NULL
         `);
 
-        // Update invoices table
-        await queryRunner.query(`
-            ALTER TABLE "invoices" ADD "agencyId" uuid
-        `);
+        // Update invoices table (only if it exists - it will be created later in AddPaymentIntegration)
+        const invoicesTableExists = await queryRunner.hasTable('invoices');
+        if (invoicesTableExists) {
+            await queryRunner.query(`
+                ALTER TABLE "invoices" ADD "agencyId" uuid
+            `);
 
-        await queryRunner.query(`
-            ALTER TABLE "invoices" ADD "createdById" uuid
-        `);
+            await queryRunner.query(`
+                ALTER TABLE "invoices" ADD "createdById" uuid
+            `);
 
-        await queryRunner.query(`
-            ALTER TABLE "invoices" ADD CONSTRAINT "FK_invoices_agency" FOREIGN KEY ("agencyId") 
-                REFERENCES "agencies"("id") ON DELETE NO ACTION
-        `);
+            await queryRunner.query(`
+                ALTER TABLE "invoices" ADD CONSTRAINT "FK_invoices_agency" FOREIGN KEY ("agencyId") 
+                    REFERENCES "agencies"("id") ON DELETE NO ACTION
+            `);
 
-        await queryRunner.query(`
-            ALTER TABLE "invoices" ADD CONSTRAINT "FK_invoices_created_by" FOREIGN KEY ("createdById") 
-                REFERENCES "users"("id") ON DELETE NO ACTION
-        `);
+            await queryRunner.query(`
+                ALTER TABLE "invoices" ADD CONSTRAINT "FK_invoices_created_by" FOREIGN KEY ("createdById") 
+                    REFERENCES "users"("id") ON DELETE NO ACTION
+            `);
 
-        // Make userId nullable in invoices
-        await queryRunner.query(`
-            ALTER TABLE "invoices" ALTER COLUMN "userId" DROP NOT NULL
-        `);
+            // Make userId nullable in invoices
+            await queryRunner.query(`
+                ALTER TABLE "invoices" ALTER COLUMN "userId" DROP NOT NULL
+            `);
+        }
 
         // Create indexes
         await queryRunner.query(`
@@ -85,23 +88,31 @@ export class UpdateOwnershipToAgency1766705000000 implements MigrationInterface 
             CREATE INDEX "IDX_proposals_agency" ON "proposals" ("agencyId")
         `);
 
-        await queryRunner.query(`
-            CREATE INDEX "IDX_invoices_agency" ON "invoices" ("agencyId")
-        `);
+        // Create invoices index only if table exists
+        if (invoicesTableExists) {
+            await queryRunner.query(`
+                CREATE INDEX "IDX_invoices_agency" ON "invoices" ("agencyId")
+            `);
+        }
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
         // Drop indexes
-        await queryRunner.query(`DROP INDEX "public"."IDX_invoices_agency"`);
+        const invoicesTableExists = await queryRunner.hasTable('invoices');
+        if (invoicesTableExists) {
+            await queryRunner.query(`DROP INDEX "public"."IDX_invoices_agency"`);
+        }
         await queryRunner.query(`DROP INDEX "public"."IDX_proposals_agency"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_clients_agency"`);
 
-        // Revert invoices table
-        await queryRunner.query(`ALTER TABLE "invoices" ALTER COLUMN "userId" SET NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "invoices" DROP CONSTRAINT "FK_invoices_created_by"`);
-        await queryRunner.query(`ALTER TABLE "invoices" DROP CONSTRAINT "FK_invoices_agency"`);
-        await queryRunner.query(`ALTER TABLE "invoices" DROP COLUMN "createdById"`);
-        await queryRunner.query(`ALTER TABLE "invoices" DROP COLUMN "agencyId"`);
+        // Revert invoices table (only if it exists)
+        if (invoicesTableExists) {
+            await queryRunner.query(`ALTER TABLE "invoices" ALTER COLUMN "userId" SET NOT NULL`);
+            await queryRunner.query(`ALTER TABLE "invoices" DROP CONSTRAINT "FK_invoices_created_by"`);
+            await queryRunner.query(`ALTER TABLE "invoices" DROP CONSTRAINT "FK_invoices_agency"`);
+            await queryRunner.query(`ALTER TABLE "invoices" DROP COLUMN "createdById"`);
+            await queryRunner.query(`ALTER TABLE "invoices" DROP COLUMN "agencyId"`);
+        }
 
         // Revert proposals table
         await queryRunner.query(`ALTER TABLE "proposals" ALTER COLUMN "userId" SET NOT NULL`);
