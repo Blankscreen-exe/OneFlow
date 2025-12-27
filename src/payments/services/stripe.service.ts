@@ -3,9 +3,18 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { Invoice } from '../../invoices/entities/invoice.entity';
 import { StripeOnboardingStatus } from '../enums/stripe-onboarding-status.enum';
+import { PaymentProvider } from '../interfaces/payment-provider.interface';
+import { PaymentProviderType } from '../enums/payment-provider.enum';
+import { PaymentOnboardingStatus } from '../enums/payment-onboarding-status.enum';
+import {
+  ConnectedAccount,
+  PaymentIntent,
+  Refund,
+  PaymentEvent,
+} from '../interfaces/payment-provider.interface';
 
 @Injectable()
-export class StripeService {
+export class StripeService implements PaymentProvider {
   private readonly logger = new Logger(StripeService.name);
   private readonly stripe: Stripe;
 
@@ -20,12 +29,19 @@ export class StripeService {
   }
 
   /**
+   * Get the provider type
+   */
+  getProviderType(): PaymentProviderType {
+    return PaymentProviderType.STRIPE;
+  }
+
+  /**
    * Create a Stripe Connect Express account for a user or agency
+   * Implements PaymentProvider interface
    */
   async createConnectedAccount(
-    type: 'express',
     email?: string,
-  ): Promise<Stripe.Account> {
+  ): Promise<ConnectedAccount> {
     try {
       const account = await this.stripe.accounts.create({
         type: 'express',
@@ -35,7 +51,11 @@ export class StripeService {
           transfers: { requested: true },
         },
       });
-      return account;
+      return {
+        id: account.id,
+        provider: PaymentProviderType.STRIPE,
+        email: account.email || email,
+      };
     } catch (error) {
       this.logger.error('Failed to create connected account', error);
       throw new BadRequestException('Failed to create Stripe account');
@@ -65,8 +85,35 @@ export class StripeService {
 
   /**
    * Get the status of a Stripe Connect account
+   * Implements PaymentProvider interface
    */
-  async getAccountStatus(accountId: string): Promise<StripeOnboardingStatus> {
+  async getAccountStatus(accountId: string): Promise<PaymentOnboardingStatus> {
+    try {
+      const account = await this.stripe.accounts.retrieve(accountId);
+      
+      if (!account.details_submitted) {
+        return PaymentOnboardingStatus.PENDING;
+      }
+      
+      if (account.charges_enabled && account.payouts_enabled) {
+        return PaymentOnboardingStatus.COMPLETED;
+      }
+      
+      if (account.charges_enabled || account.payouts_enabled) {
+        return PaymentOnboardingStatus.RESTRICTED;
+      }
+      
+      return PaymentOnboardingStatus.PENDING;
+    } catch (error) {
+      this.logger.error('Failed to get account status', error);
+      throw new BadRequestException('Failed to retrieve account status');
+    }
+  }
+
+  /**
+   * Get Stripe-specific onboarding status (for backward compatibility)
+   */
+  async getStripeAccountStatus(accountId: string): Promise<StripeOnboardingStatus> {
     try {
       const account = await this.stripe.accounts.retrieve(accountId);
       
@@ -139,7 +186,10 @@ export class StripeService {
         cancel_url: returnUrl || `${this.configService.get<string>('frontend.url')}/invoices/${invoice.id}`,
       });
 
-      return session.url || '';
+      if (!session.url) {
+        throw new BadRequestException('Failed to create payment link: session URL is null');
+      }
+      return session.url;
     } catch (error) {
       this.logger.error('Failed to create payment link', error);
       throw new BadRequestException('Failed to create payment link');
@@ -148,6 +198,7 @@ export class StripeService {
 
   /**
    * Create a payment intent with application fee for a connected account
+   * Implements PaymentProvider interface
    */
   async createPaymentIntent(
     invoice: Invoice,
@@ -155,7 +206,7 @@ export class StripeService {
     platformFeeRate: number,
     amount: number,
     metadata?: Record<string, string>,
-  ): Promise<Stripe.PaymentIntent> {
+  ): Promise<PaymentIntent> {
     try {
       // Calculate application fee amount
       const applicationFeeAmount = Math.round(
@@ -178,7 +229,17 @@ export class StripeService {
         },
       });
 
-      return paymentIntent;
+      return {
+        id: paymentIntent.id,
+        amount: paymentIntent.amount / 100, // Convert from cents
+        currency: paymentIntent.currency,
+        status: paymentIntent.status,
+        metadata: paymentIntent.metadata,
+        chargeId: paymentIntent.latest_charge as string | undefined,
+        applicationFeeAmount: paymentIntent.application_fee_amount
+          ? paymentIntent.application_fee_amount / 100
+          : undefined,
+      };
     } catch (error) {
       this.logger.error('Failed to create payment intent', error);
       throw new BadRequestException('Failed to create payment intent');
@@ -186,9 +247,44 @@ export class StripeService {
   }
 
   /**
-   * Verify webhook signature
+   * Get Stripe PaymentIntent (for backward compatibility)
    */
-  verifyWebhookSignature(payload: string | Buffer, signature: string): Stripe.Event {
+  async getStripePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+    try {
+      return await this.stripe.paymentIntents.retrieve(paymentIntentId);
+    } catch (error) {
+      this.logger.error('Failed to get payment intent', error);
+      throw new BadRequestException('Failed to retrieve payment intent');
+    }
+  }
+
+  /**
+   * Verify webhook signature
+   * Implements PaymentProvider interface
+   */
+  verifyWebhookSignature(payload: string | Buffer, signature: string): PaymentEvent {
+    const webhookSecret = this.configService.get<string>('stripe.webhookSecret');
+    if (!webhookSecret) {
+      throw new Error('STRIPE_WEBHOOK_SECRET is required');
+    }
+
+    try {
+      const event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+      return {
+        id: event.id,
+        type: event.type,
+        data: event.data,
+      };
+    } catch (error) {
+      this.logger.error('Webhook signature verification failed', error);
+      throw new BadRequestException('Invalid webhook signature');
+    }
+  }
+
+  /**
+   * Verify Stripe webhook signature (for backward compatibility)
+   */
+  verifyStripeWebhookSignature(payload: string | Buffer, signature: string): Stripe.Event {
     const webhookSecret = this.configService.get<string>('stripe.webhookSecret');
     if (!webhookSecret) {
       throw new Error('STRIPE_WEBHOOK_SECRET is required');
@@ -204,12 +300,13 @@ export class StripeService {
 
   /**
    * Process a refund
+   * Implements PaymentProvider interface
    */
   async processRefund(
     paymentIntentId: string,
     amount?: number,
     reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer',
-  ): Promise<Stripe.Refund> {
+  ): Promise<Refund> {
     try {
       const refundParams: Stripe.RefundCreateParams = {
         payment_intent: paymentIntentId,
@@ -224,7 +321,13 @@ export class StripeService {
       }
 
       const refund = await this.stripe.refunds.create(refundParams);
-      return refund;
+      return {
+        id: refund.id,
+        amount: refund.amount / 100, // Convert from cents
+        currency: refund.currency,
+        status: refund.status,
+        reason: refund.reason || undefined,
+      };
     } catch (error) {
       this.logger.error('Failed to process refund', error);
       throw new BadRequestException('Failed to process refund');
@@ -233,10 +336,22 @@ export class StripeService {
 
   /**
    * Get payment intent details
+   * Implements PaymentProvider interface
    */
-  async getPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  async getPaymentIntent(paymentIntentId: string): Promise<PaymentIntent> {
     try {
-      return await this.stripe.paymentIntents.retrieve(paymentIntentId);
+      const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentIntentId);
+      return {
+        id: paymentIntent.id,
+        amount: paymentIntent.amount / 100, // Convert from cents
+        currency: paymentIntent.currency,
+        status: paymentIntent.status,
+        metadata: paymentIntent.metadata,
+        chargeId: paymentIntent.latest_charge as string | undefined,
+        applicationFeeAmount: paymentIntent.application_fee_amount
+          ? paymentIntent.application_fee_amount / 100
+          : undefined,
+      };
     } catch (error) {
       this.logger.error('Failed to get payment intent', error);
       throw new BadRequestException('Failed to retrieve payment intent');
@@ -245,8 +360,32 @@ export class StripeService {
 
   /**
    * Handle account update webhook event
+   * Returns generic PaymentOnboardingStatus
    */
   async handleAccountUpdateWebhook(
+    event: Stripe.AccountUpdatedEvent,
+  ): Promise<PaymentOnboardingStatus> {
+    const account = event.data.object;
+    
+    if (!account.details_submitted) {
+      return PaymentOnboardingStatus.PENDING;
+    }
+    
+    if (account.charges_enabled && account.payouts_enabled) {
+      return PaymentOnboardingStatus.COMPLETED;
+    }
+    
+    if (account.charges_enabled || account.payouts_enabled) {
+      return PaymentOnboardingStatus.RESTRICTED;
+    }
+    
+    return PaymentOnboardingStatus.PENDING;
+  }
+
+  /**
+   * Handle account update webhook event (Stripe-specific, for backward compatibility)
+   */
+  async handleStripeAccountUpdateWebhook(
     event: Stripe.AccountUpdatedEvent,
   ): Promise<StripeOnboardingStatus> {
     const account = event.data.object;

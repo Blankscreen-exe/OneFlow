@@ -25,6 +25,9 @@ import { PaymentService } from './services/payment.service';
 import { StripeConnectService } from './services/stripe-connect.service';
 import { StripeWebhookService } from './services/stripe-webhook.service';
 import { StripeService } from './services/stripe.service';
+import { PaymentProviderFactory } from './services/payment-provider.factory';
+import { PaymentProviderType } from './enums/payment-provider.enum';
+import { PaymentOnboardingStatus } from './enums/payment-onboarding-status.enum';
 import { Payment } from './entities/payment.entity';
 import { CreatePaymentLinkDto } from './dto/create-payment-link.dto';
 import { RefundPaymentDto } from './dto/refund-payment.dto';
@@ -43,6 +46,7 @@ export class PaymentsController {
     private readonly stripeConnectService: StripeConnectService,
     private readonly stripeWebhookService: StripeWebhookService,
     private readonly stripeService: StripeService,
+    private readonly providerFactory: PaymentProviderFactory,
   ) {}
 
   @Post('invoices/:id/create-payment-link')
@@ -62,14 +66,21 @@ export class PaymentsController {
       throw new BadRequestException('Payment link can only be created for invoices in SENT status');
     }
 
-    // Get connected account for invoice
-    const connectedAccountId = await this.paymentService.getConnectedAccountForInvoice(invoice);
+    // Determine provider (default to Stripe for now, can be made configurable)
+    const provider = createPaymentLinkDto.provider || PaymentProviderType.STRIPE;
 
-    // Check if account is active
-    const accountStatus = await this.stripeService.getAccountStatus(connectedAccountId);
-    if (accountStatus !== StripeOnboardingStatus.ACTIVE) {
+    // Get connected account for invoice
+    const connectedAccountId = await this.paymentService.getConnectedAccountForInvoice(
+      invoice,
+      provider,
+    );
+
+    // Get provider and check if account is active
+    const paymentProvider = this.providerFactory.getProvider(provider);
+    const accountStatus = await paymentProvider.getAccountStatus(connectedAccountId);
+    if (accountStatus !== PaymentOnboardingStatus.COMPLETED) {
       throw new BadRequestException(
-        'Stripe account is not active. Please complete onboarding first.',
+        `Payment account is not active for ${provider}. Please complete onboarding first.`,
       );
     }
 
@@ -89,7 +100,7 @@ export class PaymentsController {
     const platformFeeRate = this.stripeConnectService.getPlatformFeeRate(userOrAgency);
 
     // Create payment link
-    const paymentUrl = await this.stripeService.createPaymentLink(
+    const paymentUrl = await paymentProvider.createPaymentLink(
       invoice,
       connectedAccountId,
       platformFeeRate,
@@ -176,8 +187,11 @@ export class PaymentsController {
   @ApiResponse({ status: 200, description: 'Onboarding status' })
   async checkUserOnboardingStatus(
     @CurrentUser() user: { id: string; email: string },
-  ): Promise<{ status: StripeOnboardingStatus }> {
-    const status = await this.stripeConnectService.checkOnboardingStatus(user.id);
+  ): Promise<{ status: PaymentOnboardingStatus }> {
+    const status = await this.stripeConnectService.checkOnboardingStatus(
+      user.id,
+      PaymentProviderType.STRIPE,
+    );
     return { status };
   }
 
@@ -189,8 +203,12 @@ export class PaymentsController {
   async checkAgencyOnboardingStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string },
-  ): Promise<{ status: StripeOnboardingStatus }> {
-    const status = await this.stripeConnectService.checkAgencyOnboardingStatus(id, user.id);
+  ): Promise<{ status: PaymentOnboardingStatus }> {
+    const status = await this.stripeConnectService.checkAgencyOnboardingStatus(
+      id,
+      user.id,
+      PaymentProviderType.STRIPE,
+    );
     return { status };
   }
 
@@ -250,8 +268,8 @@ export class PaymentsController {
       throw new BadRequestException('Raw body not available');
     }
 
-    // Verify signature and construct event
-    const event = this.stripeService.verifyWebhookSignature(
+    // Verify signature and construct event (Stripe-specific)
+    const event = this.stripeService.verifyStripeWebhookSignature(
       rawBody,
       signature,
     );

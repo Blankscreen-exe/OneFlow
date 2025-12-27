@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { StripeOnboardingStatus } from '../enums/stripe-onboarding-status.enum';
+import { PaymentOnboardingStatus } from '../enums/payment-onboarding-status.enum';
 
 export class OnboardingResponseDto {
   @ApiProperty({
@@ -10,10 +10,10 @@ export class OnboardingResponseDto {
   onboardingUrl: string | null;
 
   @ApiProperty({
-    enum: StripeOnboardingStatus,
+    enum: PaymentOnboardingStatus,
     description: 'Current onboarding status',
   })
-  status: StripeOnboardingStatus;
+  status: PaymentOnboardingStatus;
 }
 
 

@@ -11,6 +11,8 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { StripeOnboardingStatus } from '../../payments/enums/stripe-onboarding-status.enum';
+import { PaymentProviderType } from '../../payments/enums/payment-provider.enum';
+import { PaymentOnboardingStatus } from '../../payments/enums/payment-onboarding-status.enum';
 
 @Entity('agencies')
 export class Agency {
@@ -48,11 +50,37 @@ export class Agency {
   @OneToMany('AgencyMembership', 'agency')
   memberships: Relation<any[]>;
 
-  // Stripe Connect account ID (admin's account)
+  // Default payment provider
+  @Column({
+    type: 'varchar',
+    default: PaymentProviderType.STRIPE,
+  })
+  defaultPaymentProvider: PaymentProviderType;
+
+  // Generic payment provider account ID
+  @Column({ nullable: true })
+  paymentProviderAccountId: string;
+
+  // Generic payment onboarding status
+  @Column({
+    type: 'varchar',
+    nullable: true,
+  })
+  paymentOnboardingStatus: PaymentOnboardingStatus;
+
+  // Generic payment onboarding link (temporary, expires)
+  @Column({ nullable: true })
+  paymentOnboardingLink: string;
+
+  // When payment onboarding was completed
+  @Column({ type: 'timestamp', nullable: true })
+  paymentOnboardingCompletedAt: Date;
+
+  // Stripe Connect account ID (admin's account) - kept for backward compatibility
   @Column({ unique: true, nullable: true })
   stripeAccountId: string;
 
-  // Stripe onboarding status
+  // Stripe onboarding status - kept for backward compatibility
   @Column({
     type: 'varchar',
     default: StripeOnboardingStatus.NOT_STARTED,
@@ -63,11 +91,11 @@ export class Agency {
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 10.0 })
   platformFeeRate: number;
 
-  // Stripe onboarding link (temporary, expires)
+  // Stripe onboarding link (temporary, expires) - kept for backward compatibility
   @Column({ nullable: true })
   stripeOnboardingLink: string;
 
-  // When onboarding was completed
+  // When onboarding was completed - kept for backward compatibility
   @Column({ type: 'timestamp', nullable: true })
   stripeOnboardingCompletedAt: Date;
 
@@ -76,5 +104,20 @@ export class Agency {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  /**
+   * Get the payment account ID for a specific provider (or default provider)
+   * Falls back to Stripe account ID for backward compatibility
+   */
+  getPaymentAccountId(provider?: PaymentProviderType): string | null {
+    const targetProvider = provider || this.defaultPaymentProvider;
+    
+    if (targetProvider === PaymentProviderType.STRIPE) {
+      return this.paymentProviderAccountId || this.stripeAccountId || null;
+    }
+    
+    // For future providers, use paymentProviderAccountId
+    return this.paymentProviderAccountId || null;
+  }
 }
 

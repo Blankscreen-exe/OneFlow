@@ -52,6 +52,9 @@ export default () => {
         process.env.STRIPE_DEFAULT_PLATFORM_FEE_RATE || '10',
       ),
     },
+    payment: {
+      defaultProvider: process.env.DEFAULT_PAYMENT_PROVIDER || 'stripe',
+    },
   };
 };
 

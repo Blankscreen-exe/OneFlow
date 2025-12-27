@@ -9,6 +9,7 @@ import { StripeService } from './services/stripe.service';
 import { StripeConnectService } from './services/stripe-connect.service';
 import { PaymentService } from './services/payment.service';
 import { StripeWebhookService } from './services/stripe-webhook.service';
+import { PaymentProviderFactory } from './services/payment-provider.factory';
 import { InvoicesModule } from '../invoices/invoices.module';
 
 @Module({
@@ -22,8 +23,9 @@ import { InvoicesModule } from '../invoices/invoices.module';
     StripeConnectService,
     PaymentService,
     StripeWebhookService,
+    PaymentProviderFactory,
   ],
-  exports: [StripeService, PaymentService],
+  exports: [StripeService, PaymentService, PaymentProviderFactory],
 })
 export class PaymentsModule {}
 

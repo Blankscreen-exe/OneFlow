@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsOptional, IsString, IsUrl, IsEnum } from 'class-validator';
+import { PaymentProviderType } from '../enums/payment-provider.enum';
 
 export class CreatePaymentLinkDto {
   @ApiProperty({
@@ -11,6 +12,16 @@ export class CreatePaymentLinkDto {
   @IsString()
   @IsUrl()
   returnUrl?: string;
+
+  @ApiProperty({
+    enum: PaymentProviderType,
+    description: 'Payment provider to use',
+    required: false,
+    default: PaymentProviderType.STRIPE,
+  })
+  @IsOptional()
+  @IsEnum(PaymentProviderType)
+  provider?: PaymentProviderType;
 }
 
 

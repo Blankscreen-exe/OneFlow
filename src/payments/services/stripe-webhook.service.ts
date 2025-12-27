@@ -4,10 +4,13 @@ import { Repository } from 'typeorm';
 import Stripe from 'stripe';
 import { StripeService } from './stripe.service';
 import { PaymentService } from './payment.service';
+import { PaymentProviderFactory } from './payment-provider.factory';
+import { PaymentProviderType } from '../enums/payment-provider.enum';
 import { PaymentStatus } from '../enums/payment-status.enum';
 import { User } from '../../users/entities/user.entity';
 import { Agency } from '../../agencies/entities/agency.entity';
 import { StripeOnboardingStatus } from '../enums/stripe-onboarding-status.enum';
+import { PaymentOnboardingStatus } from '../enums/payment-onboarding-status.enum';
 
 @Injectable()
 export class StripeWebhookService {
@@ -21,6 +24,7 @@ export class StripeWebhookService {
     private agenciesRepository: Repository<Agency>,
     private stripeService: StripeService,
     private paymentService: PaymentService,
+    private providerFactory: PaymentProviderFactory,
   ) {}
 
   /**
@@ -69,10 +73,14 @@ export class StripeWebhookService {
     const paymentIntent = event.data.object;
     this.logger.log(`Payment succeeded: ${paymentIntent.id}`);
 
-    await this.paymentService.handlePaymentSucceeded(paymentIntent.id, {
-      eventId: event.id,
-      eventType: event.type,
-    });
+    await this.paymentService.handlePaymentSucceeded(
+      paymentIntent.id,
+      PaymentProviderType.STRIPE,
+      {
+        eventId: event.id,
+        eventType: event.type,
+      },
+    );
   }
 
   /**
@@ -84,12 +92,16 @@ export class StripeWebhookService {
     const paymentIntent = event.data.object;
     this.logger.log(`Payment failed: ${paymentIntent.id}`);
 
-    await this.paymentService.handlePaymentFailed(paymentIntent.id, {
-      eventId: event.id,
-      eventType: event.type,
-      failureCode: paymentIntent.last_payment_error?.code,
-      failureMessage: paymentIntent.last_payment_error?.message,
-    });
+    await this.paymentService.handlePaymentFailed(
+      paymentIntent.id,
+      PaymentProviderType.STRIPE,
+      {
+        eventId: event.id,
+        eventType: event.type,
+        failureCode: paymentIntent.last_payment_error?.code,
+        failureMessage: paymentIntent.last_payment_error?.message,
+      },
+    );
   }
 
   /**
@@ -101,9 +113,12 @@ export class StripeWebhookService {
     const charge = event.data.object;
     this.logger.log(`Charge refunded: ${charge.id}`);
 
-    // Find payment by charge ID
+    // Find payment by charge ID - check both generic and Stripe fields
     const payment = await this.paymentService['paymentsRepository'].findOne({
-      where: { stripeChargeId: charge.id },
+      where: [
+        { providerChargeId: charge.id },
+        { stripeChargeId: charge.id }, // Backward compatibility
+      ],
     });
 
     if (!payment) {
@@ -116,6 +131,14 @@ export class StripeWebhookService {
     payment.refunded = true;
     payment.refundAmount = refundAmount;
     payment.status = PaymentStatus.REFUNDED;
+    
+    // Update provider charge ID if not set
+    if (!payment.providerChargeId) {
+      payment.providerChargeId = charge.id;
+    }
+    if (!payment.stripeChargeId && payment.paymentProvider === PaymentProviderType.STRIPE) {
+      payment.stripeChargeId = charge.id;
+    }
 
     await this.paymentService['paymentsRepository'].save(payment);
 
@@ -132,32 +155,76 @@ export class StripeWebhookService {
     const account = event.data.object;
     this.logger.log(`Account updated: ${account.id}`);
 
-    // Update user account status
+    // Update user account status - check both generic and Stripe fields
     const user = await this.usersRepository.findOne({
-      where: { stripeAccountId: account.id },
+      where: [
+        { paymentProviderAccountId: account.id },
+        { stripeAccountId: account.id }, // Backward compatibility
+      ],
     });
 
     if (user) {
       const status = await this.stripeService.handleAccountUpdateWebhook(event);
-      user.stripeOnboardingStatus = status;
-      if (status === StripeOnboardingStatus.ACTIVE && !user.stripeOnboardingCompletedAt) {
-        user.stripeOnboardingCompletedAt = new Date();
+      
+      // Update both generic and Stripe fields for migration period
+      user.paymentOnboardingStatus = status;
+      user.stripeOnboardingStatus = status === PaymentOnboardingStatus.COMPLETED
+        ? StripeOnboardingStatus.ACTIVE
+        : status === PaymentOnboardingStatus.PENDING
+        ? StripeOnboardingStatus.PENDING
+        : StripeOnboardingStatus.NOT_STARTED;
+      
+      if (status === PaymentOnboardingStatus.COMPLETED) {
+        if (!user.paymentOnboardingCompletedAt) {
+          user.paymentOnboardingCompletedAt = new Date();
+        }
+        if (!user.stripeOnboardingCompletedAt) {
+          user.stripeOnboardingCompletedAt = new Date();
+        }
       }
+      
+      // Ensure paymentProviderAccountId is set if not already
+      if (!user.paymentProviderAccountId && user.stripeAccountId === account.id) {
+        user.paymentProviderAccountId = account.id;
+      }
+      
       await this.usersRepository.save(user);
       return;
     }
 
-    // Update agency account status
+    // Update agency account status - check both generic and Stripe fields
     const agency = await this.agenciesRepository.findOne({
-      where: { stripeAccountId: account.id },
+      where: [
+        { paymentProviderAccountId: account.id },
+        { stripeAccountId: account.id }, // Backward compatibility
+      ],
     });
 
     if (agency) {
       const status = await this.stripeService.handleAccountUpdateWebhook(event);
-      agency.stripeOnboardingStatus = status;
-      if (status === StripeOnboardingStatus.ACTIVE && !agency.stripeOnboardingCompletedAt) {
-        agency.stripeOnboardingCompletedAt = new Date();
+      
+      // Update both generic and Stripe fields for migration period
+      agency.paymentOnboardingStatus = status;
+      agency.stripeOnboardingStatus = status === PaymentOnboardingStatus.COMPLETED
+        ? StripeOnboardingStatus.ACTIVE
+        : status === PaymentOnboardingStatus.PENDING
+        ? StripeOnboardingStatus.PENDING
+        : StripeOnboardingStatus.NOT_STARTED;
+      
+      if (status === PaymentOnboardingStatus.COMPLETED) {
+        if (!agency.paymentOnboardingCompletedAt) {
+          agency.paymentOnboardingCompletedAt = new Date();
+        }
+        if (!agency.stripeOnboardingCompletedAt) {
+          agency.stripeOnboardingCompletedAt = new Date();
+        }
       }
+      
+      // Ensure paymentProviderAccountId is set if not already
+      if (!agency.paymentProviderAccountId && agency.stripeAccountId === account.id) {
+        agency.paymentProviderAccountId = account.id;
+      }
+      
       await this.agenciesRepository.save(agency);
     }
   }

@@ -10,7 +10,9 @@ import { PaymentStatus } from '../enums/payment-status.enum';
 import { Invoice, InvoiceStatus } from '../../invoices/entities/invoice.entity';
 import { User } from '../../users/entities/user.entity';
 import { Agency } from '../../agencies/entities/agency.entity';
-import { StripeService } from './stripe.service';
+import { PaymentProviderFactory } from './payment-provider.factory';
+import { PaymentProviderType } from '../enums/payment-provider.enum';
+import { PaymentProvider } from '../interfaces/payment-provider.interface';
 
 @Injectable()
 export class PaymentService {
@@ -23,25 +25,31 @@ export class PaymentService {
     private usersRepository: Repository<User>,
     @InjectRepository(Agency)
     private agenciesRepository: Repository<Agency>,
-    private stripeService: StripeService,
+    private providerFactory: PaymentProviderFactory,
   ) {}
 
   /**
    * Record a payment with platform fee
+   * Supports both new generic fields and legacy Stripe fields for backward compatibility
    */
   async recordPayment(
     invoiceId: string,
-    stripePaymentIntentId: string,
-    stripeAccountId: string,
+    providerPaymentId: string,
+    providerAccountId: string,
     amount: number,
     platformFee: number,
     platformFeeRate: number,
     status: PaymentStatus,
+    paymentProvider: PaymentProviderType = PaymentProviderType.STRIPE,
+    providerChargeId?: string,
     metadata?: Record<string, any>,
   ): Promise<Payment> {
-    // Check if payment already exists (idempotency)
+    // Check if payment already exists (idempotency) - check both generic and Stripe fields
     const existingPayment = await this.paymentsRepository.findOne({
-      where: { stripePaymentIntentId },
+      where: [
+        { providerPaymentId },
+        { stripePaymentIntentId: providerPaymentId }, // Backward compatibility
+      ],
     });
 
     if (existingPayment) {
@@ -50,13 +58,21 @@ export class PaymentService {
 
     const payment = this.paymentsRepository.create({
       invoiceId,
-      stripePaymentIntentId,
-      stripeAccountId,
+      paymentProvider,
+      providerPaymentId,
+      providerAccountId,
+      providerChargeId,
       amount,
       platformFee,
       platformFeeRate,
       status,
       metadata,
+      // For backward compatibility, also set Stripe fields if provider is Stripe
+      ...(paymentProvider === PaymentProviderType.STRIPE && {
+        stripePaymentIntentId: providerPaymentId,
+        stripeAccountId: providerAccountId,
+        stripeChargeId: providerChargeId,
+      }),
     });
 
     const savedPayment = await this.paymentsRepository.save(payment);
@@ -101,24 +117,26 @@ export class PaymentService {
    */
   async handlePaymentSucceeded(
     paymentIntentId: string,
+    paymentProvider: PaymentProviderType = PaymentProviderType.STRIPE,
     metadata?: Record<string, any>,
   ): Promise<Payment> {
-    // Get payment intent from Stripe
-    const paymentIntent = await this.stripeService.getPaymentIntent(paymentIntentId);
+    // Get provider and payment intent
+    const provider = this.providerFactory.getProvider(paymentProvider);
+    const paymentIntent = await provider.getPaymentIntent(paymentIntentId);
 
     // Extract application fee (platform fee)
-    const applicationFeeAmount = paymentIntent.application_fee_amount
-      ? paymentIntent.application_fee_amount / 100 // Convert from cents
-      : 0;
-
-    const amount = paymentIntent.amount / 100; // Convert from cents
+    const applicationFeeAmount = paymentIntent.applicationFeeAmount || 0;
+    const amount = paymentIntent.amount;
     const platformFeeRate = metadata?.platformFeeRate
       ? parseFloat(metadata.platformFeeRate)
       : 0;
 
-    // Find or create payment record
+    // Find or create payment record - check both generic and Stripe fields
     let payment = await this.paymentsRepository.findOne({
-      where: { stripePaymentIntentId: paymentIntentId },
+      where: [
+        { providerPaymentId: paymentIntentId },
+        { stripePaymentIntentId: paymentIntentId }, // Backward compatibility
+      ],
     });
 
     if (!payment) {
@@ -127,19 +145,8 @@ export class PaymentService {
         throw new BadRequestException('Invoice ID not found in payment intent metadata');
       }
 
-      // Extract connected account ID
-      let connectedAccountId = '';
-      if (typeof paymentIntent.on_behalf_of === 'string') {
-        connectedAccountId = paymentIntent.on_behalf_of;
-      } else if (paymentIntent.on_behalf_of && typeof paymentIntent.on_behalf_of === 'object' && 'id' in paymentIntent.on_behalf_of) {
-        connectedAccountId = paymentIntent.on_behalf_of.id;
-      } else if (paymentIntent.transfer_data?.destination) {
-        if (typeof paymentIntent.transfer_data.destination === 'string') {
-          connectedAccountId = paymentIntent.transfer_data.destination;
-        } else if (paymentIntent.transfer_data.destination && typeof paymentIntent.transfer_data.destination === 'object' && 'id' in paymentIntent.transfer_data.destination) {
-          connectedAccountId = paymentIntent.transfer_data.destination.id;
-        }
-      }
+      // Extract connected account ID from metadata (provider-agnostic)
+      const connectedAccountId = metadata?.connectedAccountId || paymentIntent.metadata?.connectedAccountId || '';
 
       payment = await this.recordPayment(
         invoiceId,
@@ -149,9 +156,11 @@ export class PaymentService {
         applicationFeeAmount,
         platformFeeRate,
         PaymentStatus.SUCCEEDED,
+        paymentProvider,
+        paymentIntent.chargeId,
         {
           ...paymentIntent.metadata,
-          chargeId: paymentIntent.latest_charge as string,
+          chargeId: paymentIntent.chargeId,
           ...metadata,
         },
       );
@@ -159,7 +168,23 @@ export class PaymentService {
       payment.status = PaymentStatus.SUCCEEDED;
       payment.amount = amount;
       payment.platformFee = applicationFeeAmount;
-      payment.stripeChargeId = paymentIntent.latest_charge as string;
+      
+      // Update provider-specific fields
+      if (!payment.paymentProvider) {
+        payment.paymentProvider = paymentProvider;
+      }
+      if (!payment.providerPaymentId) {
+        payment.providerPaymentId = paymentIntentId;
+      }
+      if (paymentIntent.chargeId && !payment.providerChargeId) {
+        payment.providerChargeId = paymentIntent.chargeId;
+      }
+      
+      // Backward compatibility: update Stripe fields if provider is Stripe
+      if (paymentProvider === PaymentProviderType.STRIPE) {
+        payment.stripeChargeId = paymentIntent.chargeId || payment.stripeChargeId;
+      }
+      
       if (metadata) {
         payment.metadata = { ...payment.metadata, ...metadata };
       }
@@ -177,15 +202,21 @@ export class PaymentService {
    */
   async handlePaymentFailed(
     paymentIntentId: string,
+    paymentProvider: PaymentProviderType = PaymentProviderType.STRIPE,
     metadata?: Record<string, any>,
   ): Promise<Payment> {
+    // Find payment - check both generic and Stripe fields
     let payment = await this.paymentsRepository.findOne({
-      where: { stripePaymentIntentId: paymentIntentId },
+      where: [
+        { providerPaymentId: paymentIntentId },
+        { stripePaymentIntentId: paymentIntentId }, // Backward compatibility
+      ],
     });
 
     if (!payment) {
       // Try to get payment intent to extract invoice ID
-      const paymentIntent = await this.stripeService.getPaymentIntent(paymentIntentId);
+      const provider = this.providerFactory.getProvider(paymentProvider);
+      const paymentIntent = await provider.getPaymentIntent(paymentIntentId);
       const invoiceId = paymentIntent.metadata?.invoiceId;
       if (!invoiceId) {
         throw new BadRequestException('Invoice ID not found in payment intent metadata');
@@ -193,15 +224,20 @@ export class PaymentService {
 
       payment = this.paymentsRepository.create({
         invoiceId,
-        stripePaymentIntentId: paymentIntentId,
+        paymentProvider,
+        providerPaymentId: paymentIntentId,
         status: PaymentStatus.FAILED,
-        amount: paymentIntent.amount / 100,
+        amount: paymentIntent.amount,
         platformFee: 0,
         platformFeeRate: 0,
         metadata: {
           ...paymentIntent.metadata,
           ...metadata,
         },
+        // Backward compatibility: set Stripe fields if provider is Stripe
+        ...(paymentProvider === PaymentProviderType.STRIPE && {
+          stripePaymentIntentId: paymentIntentId,
+        }),
       });
     } else {
       payment.status = PaymentStatus.FAILED;
@@ -237,17 +273,26 @@ export class PaymentService {
       throw new BadRequestException('Payment has already been refunded');
     }
 
-    // Process refund via Stripe
-    const refund = await this.stripeService.processRefund(
-      payment.stripePaymentIntentId,
+    // Get provider for this payment
+    const paymentProvider = payment.paymentProvider || PaymentProviderType.STRIPE;
+    const provider = this.providerFactory.getProvider(paymentProvider);
+    
+    // Get payment intent ID (generic or Stripe fallback)
+    const paymentIntentId = payment.getProviderPaymentId();
+    if (!paymentIntentId) {
+      throw new BadRequestException('Payment intent ID not found');
+    }
+
+    // Process refund via provider
+    const refund = await provider.processRefund(
+      paymentIntentId,
       amount,
       reason,
     );
 
     // Update payment record
-    const refundAmount = refund.amount / 100; // Convert from cents
     payment.refunded = true;
-    payment.refundAmount = refundAmount;
+    payment.refundAmount = refund.amount;
     payment.status = PaymentStatus.REFUNDED;
 
     await this.paymentsRepository.save(payment);
@@ -311,8 +356,12 @@ export class PaymentService {
 
   /**
    * Get the connected account for an invoice (user or agency admin)
+   * Returns provider-agnostic account ID
    */
-  async getConnectedAccountForInvoice(invoice: Invoice): Promise<string> {
+  async getConnectedAccountForInvoice(
+    invoice: Invoice,
+    provider: PaymentProviderType = PaymentProviderType.STRIPE,
+  ): Promise<string> {
     // If invoice belongs to an agency, use agency admin's account
     if (invoice.agencyId) {
       const agency = await this.agenciesRepository.findOne({
@@ -324,11 +373,14 @@ export class PaymentService {
         throw new NotFoundException('Agency not found');
       }
 
-      if (!agency.stripeAccountId) {
-        throw new BadRequestException('Agency Stripe account not set up. Please complete onboarding.');
+      const accountId = agency.getPaymentAccountId(provider);
+      if (!accountId) {
+        throw new BadRequestException(
+          `Agency payment account not set up for ${provider}. Please complete onboarding.`,
+        );
       }
 
-      return agency.stripeAccountId;
+      return accountId;
     }
 
     // Otherwise, use user's account
@@ -344,11 +396,22 @@ export class PaymentService {
       throw new NotFoundException('User not found');
     }
 
-    if (!user.stripeAccountId) {
-      throw new BadRequestException('User Stripe account not set up. Please complete onboarding.');
+    const accountId = user.getPaymentAccountId(provider);
+    if (!accountId) {
+      throw new BadRequestException(
+        `User payment account not set up for ${provider}. Please complete onboarding.`,
+      );
     }
 
-    return user.stripeAccountId;
+    return accountId;
+  }
+
+  /**
+   * Get the provider for a payment (with fallback to Stripe for backward compatibility)
+   */
+  getProviderForPayment(payment: Payment): PaymentProvider {
+    const providerType = payment.paymentProvider || PaymentProviderType.STRIPE;
+    return this.providerFactory.getProvider(providerType);
   }
 }
 
