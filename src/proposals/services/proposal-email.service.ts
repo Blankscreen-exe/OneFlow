@@ -22,6 +22,7 @@ export class ProposalEmailService {
     private emailService: EmailService,
     private proposalAcceptanceService: ProposalAcceptanceService,
     private configService: ConfigService,
+    private notificationService: NotificationService,
   ) {}
 
   /**
@@ -78,6 +79,14 @@ export class ProposalEmailService {
       contactMethod.sentAt = new Date();
       contactMethod.deliveryStatus = DeliveryStatus.DELIVERED;
       await this.proposalContactMethodsRepository.save(contactMethod);
+
+      // Track notification
+      await this.notificationService.sendProposalNotification(
+        proposal,
+        contact.value,
+        proposal.userId,
+        proposal.client?.agencyId,
+      );
 
       this.logger.log(
         `Proposal ${proposal.id} sent via email to ${contact.value}`,

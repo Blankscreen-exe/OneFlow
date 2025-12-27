@@ -55,6 +55,11 @@ export default () => {
     payment: {
       defaultProvider: process.env.DEFAULT_PAYMENT_PROVIDER || 'stripe',
     },
+    notifications: {
+      overdueReminderSchedule:
+        process.env.OVERDUE_REMINDER_SCHEDULE || '0 9 * * *', // Daily at 9 AM
+      defaultOverdueReminderDays: [7], // Default reminder schedule
+    },
   };
 };
 

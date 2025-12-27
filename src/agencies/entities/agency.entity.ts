@@ -99,6 +99,14 @@ export class Agency {
   @Column({ type: 'timestamp', nullable: true })
   stripeOnboardingCompletedAt: Date;
 
+  // Email notification preferences
+  @Column({ type: 'jsonb', nullable: true })
+  emailPreferences: {
+    paymentConfirmationEnabled?: boolean;
+    invoiceRemindersEnabled?: boolean;
+    overdueReminderDays?: number[];
+  };
+
   @CreateDateColumn()
   createdAt: Date;
 

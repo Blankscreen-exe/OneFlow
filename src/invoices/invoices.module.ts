@@ -11,6 +11,7 @@ import { InvoicesService } from './services/invoices.service';
 import { InvoicesController } from './invoices.controller';
 import { EmailModule } from '../email/email.module';
 import { TimelineModule } from '../timeline/timeline.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { TimelineModule } from '../timeline/timeline.module';
     ]),
     EmailModule.forRoot(),
     TimelineModule,
+    NotificationsModule,
   ],
   controllers: [InvoicesController],
   providers: [

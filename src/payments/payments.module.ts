@@ -12,6 +12,7 @@ import { StripeWebhookService } from './services/stripe-webhook.service';
 import { PaymentProviderFactory } from './services/payment-provider.factory';
 import { InvoicesModule } from '../invoices/invoices.module';
 import { TimelineModule } from '../timeline/timeline.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [

@@ -18,6 +18,9 @@ import { ProposalsModule } from './proposals/proposals.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PaymentsModule } from './payments/payments.module';
 import { TimelineModule } from './timeline/timeline.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -37,6 +40,9 @@ import { TimelineModule } from './timeline/timeline.module';
     InvoicesModule,
     PaymentsModule,
     TimelineModule,
+    DashboardModule,
+    NotificationsModule,
+    ScheduleModule.forRoot(),
   ],
   providers: [
     {

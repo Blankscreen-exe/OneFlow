@@ -71,6 +71,12 @@ export class Client {
   })
   contacts: Relation<any[]>;
 
+  // Email notification preferences (client can opt out)
+  @Column({ type: 'jsonb', nullable: true })
+  emailPreferences: {
+    paymentConfirmationEnabled?: boolean;
+  };
+
   @CreateDateColumn()
   createdAt: Date;
 

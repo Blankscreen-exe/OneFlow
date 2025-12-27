@@ -16,10 +16,13 @@ import { PaymentProvider } from '../interfaces/payment-provider.interface';
 import { TimelineService } from '../../timeline/services/timeline.service';
 import { TimelineEventType } from '../../timeline/enums/timeline-event-type.enum';
 import { RelatedEntityType } from '../../timeline/enums/related-entity-type.enum';
+import { NotificationService } from '../../notifications/services/notification.service';
 import { formatPaymentReceivedEvent } from '../../timeline/utils/event-formatter.util';
 
 @Injectable()
 export class PaymentService {
+  private readonly logger = new Logger(PaymentService.name);
+
   constructor(
     @InjectRepository(Payment)
     private paymentsRepository: Repository<Payment>,
@@ -223,6 +226,26 @@ export class PaymentService {
         RelatedEntityType.PAYMENT,
         payment.id,
       );
+
+      // Send payment confirmation email
+      const clientEmail = invoice.client?.email;
+      if (clientEmail) {
+        try {
+          await this.notificationService.sendPaymentConfirmation(
+            payment,
+            invoice,
+            clientEmail,
+            invoice.userId,
+            invoice.agencyId,
+          );
+        } catch (error) {
+          // Log error but don't fail the payment processing
+          this.logger.error(
+            `Failed to send payment confirmation email for payment ${payment.id}:`,
+            error,
+          );
+        }
+      }
     }
 
     return payment;
