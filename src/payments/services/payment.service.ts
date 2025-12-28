@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -34,6 +35,7 @@ export class PaymentService {
     private agenciesRepository: Repository<Agency>,
     private providerFactory: PaymentProviderFactory,
     private timelineService: TimelineService,
+    private notificationService: NotificationService,
   ) {}
 
   /**

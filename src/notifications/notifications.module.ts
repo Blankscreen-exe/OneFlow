@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { Notification } from './entities/notification.entity';
 import { User } from '../users/entities/user.entity';
 import { Agency } from '../agencies/entities/agency.entity';
@@ -13,7 +14,8 @@ import { Invoice } from '../invoices/entities/invoice.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Notification, User, Agency, Client, Invoice]),
-    EmailModule,
+    EmailModule.forRoot(),
+    ScheduleModule.forRoot(),
   ],
   controllers: [NotificationsController],
   providers: [NotificationService, OverdueReminderScheduler],

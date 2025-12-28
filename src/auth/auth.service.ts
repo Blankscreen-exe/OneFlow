@@ -185,7 +185,7 @@ export class AuthService {
     };
   }
 
-  private generateToken(userId: string, email: string, role: Role): string {
+  public generateToken(userId: string, email: string, role: Role): string {
     const payload = { email, sub: userId, role };
     return this.jwtService.sign(payload, {
       expiresIn: this.configService.get<string>('jwt.expiresIn'),

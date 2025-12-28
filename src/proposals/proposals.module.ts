@@ -30,6 +30,7 @@ import { ProposalsController } from './proposals.controller';
     EmailModule.forRoot(),
     AIModule.forRoot(),
     TimelineModule,
+    NotificationsModule,
   ],
   controllers: [ProposalsController],
   providers: [

@@ -14,6 +14,7 @@ import { Invoice } from '../../invoices/entities/invoice.entity';
 import { Payment } from '../../payments/entities/payment.entity';
 import { Proposal } from '../../proposals/entities/proposal.entity';
 import { ConfigService } from '@nestjs/config';
+import { EmailPreferencesResponseDto } from '../dto/notification-response.dto';
 
 export interface EmailPreferences {
   paymentConfirmationEnabled?: boolean;
@@ -517,7 +518,7 @@ export class NotificationService {
     preferences: Partial<EmailPreferences>,
     userId?: string,
     agencyId?: string,
-  ): Promise<EmailPreferences> {
+  ): Promise<EmailPreferencesResponseDto> {
     if (agencyId) {
       const agency = await this.agenciesRepository.findOne({
         where: { id: agencyId },
@@ -537,7 +538,11 @@ export class NotificationService {
         emailPreferences: updatedPreferences,
       });
 
-      return updatedPreferences;
+      return {
+        paymentConfirmationEnabled: updatedPreferences.paymentConfirmationEnabled ?? true,
+        invoiceRemindersEnabled: updatedPreferences.invoiceRemindersEnabled ?? true,
+        overdueReminderDays: updatedPreferences.overdueReminderDays ?? [7],
+      };
     }
 
     if (userId) {
@@ -557,7 +562,11 @@ export class NotificationService {
         emailPreferences: updatedPreferences,
       });
 
-      return updatedPreferences;
+      return {
+        paymentConfirmationEnabled: updatedPreferences.paymentConfirmationEnabled ?? true,
+        invoiceRemindersEnabled: updatedPreferences.invoiceRemindersEnabled ?? true,
+        overdueReminderDays: updatedPreferences.overdueReminderDays ?? [7],
+      };
     }
 
     throw new Error('Either userId or agencyId must be provided');

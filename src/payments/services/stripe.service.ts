@@ -325,7 +325,7 @@ export class StripeService implements PaymentProvider {
         id: refund.id,
         amount: refund.amount / 100, // Convert from cents
         currency: refund.currency,
-        status: refund.status,
+        status: refund.status || 'pending',
         reason: refund.reason || undefined,
       };
     } catch (error) {

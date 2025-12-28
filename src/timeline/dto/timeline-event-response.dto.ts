@@ -25,6 +25,7 @@ export class TimelineEventResponseDto {
     description: 'Event metadata',
     type: 'object',
     nullable: true,
+    additionalProperties: true,
   })
   metadata: Record<string, any> | null;
 

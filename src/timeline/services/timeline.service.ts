@@ -64,9 +64,10 @@ export class TimelineService {
       metadata: metadata || null,
       relatedEntityType: relatedEntityType || null,
       relatedEntityId: relatedEntityId || null,
-    });
+    } as any);
 
-    return await this.timelineEventsRepository.save(event);
+    const saved = await this.timelineEventsRepository.save(event);
+    return Array.isArray(saved) ? saved[0] : saved;
   }
 
   /**
@@ -120,9 +121,10 @@ export class TimelineService {
       metadata: null,
       relatedEntityType: null,
       relatedEntityId: null,
-    });
+    } as any);
 
-    return await this.timelineEventsRepository.save(event);
+    const saved = await this.timelineEventsRepository.save(event);
+    return Array.isArray(saved) ? saved[0] : saved;
   }
 
   /**

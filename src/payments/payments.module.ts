@@ -19,6 +19,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     TypeOrmModule.forFeature([Payment, User, Agency, Invoice]),
     InvoicesModule,
     TimelineModule,
+    NotificationsModule,
   ],
   controllers: [PaymentsController],
   providers: [

@@ -9,6 +9,7 @@ import { ClientContact, ContactType } from '../../client-contacts/entities/clien
 import { DeliveryStatus } from '../enums/delivery-status.enum';
 import { ProposalAcceptanceService } from './proposal-acceptance.service';
 import { getProposalEmailTemplate } from '../templates/proposal-email.template';
+import { NotificationService } from '../../notifications/services/notification.service';
 
 @Injectable()
 export class ProposalEmailService {

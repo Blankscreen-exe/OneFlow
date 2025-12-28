@@ -21,6 +21,7 @@ import { TimelineModule } from './timeline/timeline.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -39,11 +40,12 @@ import { ScheduleModule } from '@nestjs/schedule';
     ProposalsModule,
     InvoicesModule,
     PaymentsModule,
-    TimelineModule,
-    DashboardModule,
-    NotificationsModule,
-    ScheduleModule.forRoot(),
-  ],
+          TimelineModule,
+          DashboardModule,
+          NotificationsModule,
+          ScheduleModule.forRoot(),
+          AdminModule,
+        ],
   providers: [
     {
       provide: APP_PIPE,
